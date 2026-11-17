@@ -203,6 +203,7 @@ API (full list in [api-design](docs/api/api-design.md), interactive docs at `/do
 ## Assumptions and limitations
 
 - All numbers are synthetic; thresholds are calibrated to the simulator.
+- **Known interaction bug:** a degrading hydraulic system lowers idle pressure, the state classifier reads idle as "off", and Approach 2 reports a false `UNEXPECTED_STOP` (visible on ST-008 in the demo). Details in `IMPLEMENTATION_STATUS.md`.
 - Python 3.13 was used (spec said 3.12); not tested on 3.12.
 - shadcn/ui was not installed; `components/ui.tsx` has a few hand-written Tailwind components in that style.
 - No authentication, no retention policy (at 10 stations × 0.5 Hz readings grow ~430k rows per real-time day), SQLite single-writer.

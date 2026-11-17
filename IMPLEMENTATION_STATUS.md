@@ -25,6 +25,10 @@ Last updated at the end of the build session. "Verified" means I ran it and look
 - **Frontend:** built and screenshot-checked; no automated frontend tests.
 - **Mermaid:** the 10 required diagrams exist across docs (architecture, sensor data flow, Approach 2, failure workflow, vision, ER, API sequence, sensor-health state, belt tracking, simulator states) but were not rendered through a Mermaid parser here, only written carefully.
 
+## Known issues found while running the app
+- **Degradation fools the state classifier (false "unexpected stop").** In the live demo ST-008 (simulated hydraulic degradation) lowers idle high-pressure from ~30 to ~20 bar. The state classifier was trained on healthy pressures, labels those idle minutes `A` (off) instead of `B` (idle), and Approach 2 then reports `UNEXPECTED_STOP` for cycles whose state sequence is a normal `CDC` (confirmed from the stored evidence and raw readings). The two models interact badly: a failing hydraulic system looks like a stopped drive. Not fixed (needs training the state classifier on degraded data or normalising idle pressure); the anomaly evaluation above does not cover this because test data contains no degradation during cycles.
+- ST-002 shows a vibration anomaly plus an idler-wear prediction because the injected vibration anomaly resembles idler degradation (see README).
+
 ## Not done
 Approach 3; Docker / Compose; XGBoost/Naive-Bayes comparison; matplotlib evaluation plots (confusion matrices are in the JSON/README as numbers); a real vision dataset; WebSockets; quantisation; Claude Code session transcript export (see `ai_usage/`).
 
