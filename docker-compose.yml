@@ -1,0 +1,13 @@
+services:
+  conveyor:
+    build: .
+    ports: ["8000:8000"]
+    environment:
+      SIM_AUTOSTART: "true"
+      SIM_WARM_START_HOURS: "12"
+      SIM_SPEED: "30"
+      INFERENCE_INTERVAL_S: "5"
+    volumes:
+      - conveyor-data:/data
+volumes:
+  conveyor-data:

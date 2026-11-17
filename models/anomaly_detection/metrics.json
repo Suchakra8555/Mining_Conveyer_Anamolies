@@ -1,0 +1,335 @@
+{
+  "protocol": "Train + evaluate Approach 2 with an anti-circularity protocol. Run:  python -m app.ml.anomaly_detection.train\n\nProtocol\n  * TRAIN  seed 42, days 1-14   (noise x1.0, held-out: INTERMITTENT_OPERATION cycles and SHORT_PAUSE oddities never appear)\n  * VAL    seed 42, days 15-21  (chronological continuation; the ONLY place model choice is made)\n  * TEST   seeds 2001, 2002 x 14 days, noise x1.5, 25 % of normal cycles carry a benign oddity, all scenario variants present\n  * the deployed model is refit on TRAIN+VAL only; TEST data is never used for fitting, selection or threshold changes\n",
+  "note": "All results are on SYNTHETIC simulator data. They measure this pipeline only and are NOT comparable to the paper's published numbers.",
+  "validation": {
+    "xtree": {
+      "state_macro_f1": 0.9879,
+      "abnormal_f1": 0.96,
+      "recall": 0.9231,
+      "fpr": 0.0
+    },
+    "rf": {
+      "state_macro_f1": 0.9878,
+      "abnormal_f1": 0.9495,
+      "recall": 0.9038,
+      "fpr": 0.0
+    },
+    "dt": {
+      "state_macro_f1": 0.9876,
+      "abnormal_f1": 0.9652,
+      "recall": 0.9327,
+      "fpr": 0.0
+    },
+    "mlp": {
+      "state_macro_f1": 0.9866,
+      "abnormal_f1": 0.8877,
+      "recall": 0.7981,
+      "fpr": 0.0
+    },
+    "nb": {
+      "state_macro_f1": 0.9831,
+      "abnormal_f1": 0.6133,
+      "recall": 0.4423,
+      "fpr": 0.0
+    },
+    "xgb": {
+      "state_macro_f1": 0.9879,
+      "abnormal_f1": 0.9903,
+      "recall": 0.9808,
+      "fpr": 0.0
+    }
+  },
+  "test": {
+    "seeds": [
+      2001,
+      2002
+    ],
+    "noise_scale": 1.5,
+    "benign_prob": 0.25,
+    "deployed_classifier": "xgb",
+    "state_macro_f1": [
+      0.9871,
+      0.9864
+    ],
+    "state_confusion_matrix_seed2001": {
+      "labels": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "matrix": [
+        [
+          51553,
+          71,
+          0,
+          2
+        ],
+        [
+          116,
+          52460,
+          299,
+          3
+        ],
+        [
+          0,
+          147,
+          12503,
+          300
+        ],
+        [
+          0,
+          0,
+          302,
+          83844
+        ]
+      ]
+    },
+    "cycle_level": {
+      "precision": 0.6918,
+      "recall": 0.9573,
+      "f1": 0.8032,
+      "false_positive_rate": 0.0719,
+      "false_negative_rate": 0.0427,
+      "confusion": {
+        "tp": 404,
+        "fp": 180,
+        "fn": 18,
+        "tn": 2322
+      },
+      "n_cycles": 2924,
+      "n_abnormal": 422,
+      "recall_by_scenario": {
+        "ABNORMAL_STARTUP": [
+          0.898,
+          147
+        ],
+        "INTERMITTENT_OPERATION": [
+          1.0,
+          145
+        ],
+        "UNEXPECTED_STOP": [
+          0.977,
+          130
+        ]
+      },
+      "recall_by_severity": {
+        "LOW": [
+          0.93,
+          129
+        ],
+        "MEDIUM": [
+          0.97,
+          132
+        ],
+        "HIGH": [
+          0.969,
+          161
+        ]
+      },
+      "recall_by_scenario_and_severity": {
+        "ABNORMAL_STARTUP/LOW": [
+          0.885,
+          52
+        ],
+        "ABNORMAL_STARTUP/MEDIUM": [
+          0.909,
+          44
+        ],
+        "ABNORMAL_STARTUP/HIGH": [
+          0.902,
+          51
+        ],
+        "INTERMITTENT_OPERATION/LOW": [
+          1.0,
+          35
+        ],
+        "INTERMITTENT_OPERATION/MEDIUM": [
+          1.0,
+          45
+        ],
+        "INTERMITTENT_OPERATION/HIGH": [
+          1.0,
+          65
+        ],
+        "UNEXPECTED_STOP/LOW": [
+          0.929,
+          42
+        ],
+        "UNEXPECTED_STOP/MEDIUM": [
+          1.0,
+          43
+        ],
+        "UNEXPECTED_STOP/HIGH": [
+          1.0,
+          45
+        ]
+      },
+      "false_positive_rate_by_benign_variant": {
+        "-": [
+          0.0,
+          1863
+        ],
+        "SLOW_STARTUP": [
+          0.0,
+          218
+        ],
+        "SHORT_PAUSE": [
+          0.857,
+          210
+        ],
+        "LOAD_SPIKE": [
+          0.0,
+          211
+        ]
+      },
+      "indeterminate_data_gap": 0,
+      "missed_cycles": 0
+    },
+    "value_rule_checks_per_seed": [
+      {
+        "recall_by_kind_and_severity": {
+          "BELT_SLIPPAGE/HIGH": [
+            0.9,
+            10
+          ],
+          "BELT_SLIPPAGE/LOW": [
+            0.0,
+            10
+          ],
+          "BELT_SLIPPAGE/MEDIUM": [
+            0.2,
+            10
+          ],
+          "EXCESSIVE_TEMPERATURE/HIGH": [
+            0.5,
+            10
+          ],
+          "EXCESSIVE_TEMPERATURE/LOW": [
+            0.0,
+            10
+          ],
+          "EXCESSIVE_TEMPERATURE/MEDIUM": [
+            0.0,
+            10
+          ],
+          "EXCESSIVE_VIBRATION/HIGH": [
+            0.4,
+            10
+          ],
+          "EXCESSIVE_VIBRATION/LOW": [
+            0.0,
+            10
+          ],
+          "EXCESSIVE_VIBRATION/MEDIUM": [
+            0.5,
+            10
+          ],
+          "HYDRAULIC_FLUCTUATION/HIGH": [
+            0.125,
+            8
+          ],
+          "HYDRAULIC_FLUCTUATION/LOW": [
+            0.0,
+            10
+          ],
+          "HYDRAULIC_FLUCTUATION/MEDIUM": [
+            0.4,
+            10
+          ],
+          "MOTOR_OVERLOAD/HIGH": [
+            0.0,
+            10
+          ],
+          "MOTOR_OVERLOAD/LOW": [
+            0.0,
+            10
+          ],
+          "MOTOR_OVERLOAD/MEDIUM": [
+            0.1,
+            10
+          ]
+        },
+        "false_alarm_rate_on_normal_windows": [
+          0.0639,
+          6493
+        ]
+      },
+      {
+        "recall_by_kind_and_severity": {
+          "BELT_SLIPPAGE/HIGH": [
+            0.9,
+            10
+          ],
+          "BELT_SLIPPAGE/LOW": [
+            0.0,
+            10
+          ],
+          "BELT_SLIPPAGE/MEDIUM": [
+            0.5,
+            10
+          ],
+          "EXCESSIVE_TEMPERATURE/HIGH": [
+            0.9,
+            10
+          ],
+          "EXCESSIVE_TEMPERATURE/LOW": [
+            0.0,
+            10
+          ],
+          "EXCESSIVE_TEMPERATURE/MEDIUM": [
+            0.0,
+            10
+          ],
+          "EXCESSIVE_VIBRATION/HIGH": [
+            0.5,
+            10
+          ],
+          "EXCESSIVE_VIBRATION/LOW": [
+            0.0,
+            10
+          ],
+          "EXCESSIVE_VIBRATION/MEDIUM": [
+            0.7,
+            10
+          ],
+          "HYDRAULIC_FLUCTUATION/HIGH": [
+            0.8,
+            10
+          ],
+          "HYDRAULIC_FLUCTUATION/LOW": [
+            0.4,
+            10
+          ],
+          "HYDRAULIC_FLUCTUATION/MEDIUM": [
+            0.8,
+            10
+          ],
+          "MOTOR_OVERLOAD/HIGH": [
+            0.0,
+            10
+          ],
+          "MOTOR_OVERLOAD/LOW": [
+            0.0,
+            10
+          ],
+          "MOTOR_OVERLOAD/MEDIUM": [
+            0.0,
+            10
+          ]
+        },
+        "false_alarm_rate_on_normal_windows": [
+          0.0626,
+          6490
+        ]
+      }
+    ]
+  },
+  "selected_on_validation": "xgb",
+  "diagnostics": {
+    "shuffled_label_state_macro_f1": 0.199,
+    "trivial_speed_threshold_state_macro_f1": 0.955,
+    "feature_columns_contain_truth": false
+  },
+  "inference_ms_per_6h_window": 22.27
+}

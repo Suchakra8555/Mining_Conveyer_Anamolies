@@ -1,0 +1,306 @@
+{
+  "protocol": "Train + evaluate the failure model with an anti-circularity protocol. Run:  python -m app.ml.failure_prediction.train\n\n* TRAIN  seed 42, episodes in days 1-15, profiles {linear, accelerating}, noise x1.0\n* VAL    seed 42, episodes in days 17-22 (purge gap of 1 day); the ONLY place the model candidate is chosen\n* TEST   seeds 2001, 2002 x 14 days, noise x1.5, benign oddities, severity-graded value anomalies as hard negatives,\n         and a HELD-OUT degradation profile (\"early_onset\", shape 0.5) that never appears in training\n* HELD-OUT SCENARIO experiment: a model trained without belt_abrasion is asked about belt_abrasion windows\n* the deployed model is refit on TRAIN+VAL only\n",
+  "note": "All results are on SYNTHETIC simulator data. They measure this pipeline only and are NOT comparable to published numbers.",
+  "windows": {
+    "train": 5391,
+    "val": 4068,
+    "test": 9575
+  },
+  "label_min_level": 0.25,
+  "severity_buckets": "degradation level LOW 0.25-0.5, MEDIUM 0.5-0.75, HIGH >=0.75",
+  "validation": {
+    "extra_trees": {
+      "macro_f1": 0.8456
+    },
+    "random_forest": {
+      "macro_f1": 0.9129
+    },
+    "gradient_boosting": {
+      "macro_f1": 0.7511
+    }
+  },
+  "test": {
+    "seeds": [
+      2001,
+      2002
+    ],
+    "noise_scale": 1.5,
+    "deployed_model": "random_forest",
+    "accuracy": 0.9696,
+    "macro_f1": 0.769,
+    "per_class": {
+      "NORMAL": {
+        "precision": 0.9987,
+        "recall": 0.9791,
+        "f1-score": 0.9888,
+        "support": 8892
+      },
+      "bearing_degradation": {
+        "precision": 0.7946,
+        "recall": 0.8558,
+        "f1-score": 0.8241,
+        "support": 104
+      },
+      "pulley_degradation": {
+        "precision": 0.4688,
+        "recall": 0.6742,
+        "f1-score": 0.553,
+        "support": 89
+      },
+      "idler_deterioration": {
+        "precision": 0.3679,
+        "recall": 0.4483,
+        "f1-score": 0.4041,
+        "support": 87
+      },
+      "belt_tension_degradation": {
+        "precision": 0.9275,
+        "recall": 1.0,
+        "f1-score": 0.9624,
+        "support": 128
+      },
+      "belt_abrasion": {
+        "precision": 0.8796,
+        "recall": 0.9406,
+        "f1-score": 0.9091,
+        "support": 101
+      },
+      "motor_overheating": {
+        "precision": 0.5983,
+        "recall": 0.9091,
+        "f1-score": 0.7216,
+        "support": 77
+      },
+      "hydraulic_degradation": {
+        "precision": 0.651,
+        "recall": 1.0,
+        "f1-score": 0.7886,
+        "support": 97
+      }
+    },
+    "per_component": {
+      "BEARING": {
+        "precision": 0.7946,
+        "recall": 0.8558,
+        "f1-score": 0.8241,
+        "support": 104
+      },
+      "CONVEYOR_BELT": {
+        "precision": 0.9065,
+        "recall": 0.9738,
+        "f1-score": 0.9389,
+        "support": 229
+      },
+      "DRIVE_MOTOR": {
+        "precision": 0.5983,
+        "recall": 0.9091,
+        "f1-score": 0.7216,
+        "support": 77
+      },
+      "HYDRAULIC_SYSTEM": {
+        "precision": 0.651,
+        "recall": 1.0,
+        "f1-score": 0.7886,
+        "support": 97
+      },
+      "IDLER": {
+        "precision": 0.3679,
+        "recall": 0.4483,
+        "f1-score": 0.4041,
+        "support": 87
+      },
+      "NORMAL": {
+        "precision": 0.9987,
+        "recall": 0.9791,
+        "f1-score": 0.9888,
+        "support": 8892
+      },
+      "PULLEY": {
+        "precision": 0.4688,
+        "recall": 0.6742,
+        "f1-score": 0.553,
+        "support": 89
+      }
+    },
+    "confusion_matrix": {
+      "labels": [
+        "NORMAL",
+        "bearing_degradation",
+        "pulley_degradation",
+        "idler_deterioration",
+        "belt_tension_degradation",
+        "belt_abrasion",
+        "motor_overheating",
+        "hydraulic_degradation"
+      ],
+      "matrix": [
+        [
+          8706,
+          7,
+          17,
+          42,
+          10,
+          11,
+          47,
+          52
+        ],
+        [
+          0,
+          89,
+          1,
+          14,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          16,
+          60,
+          11,
+          0,
+          1,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          47,
+          39,
+          0,
+          1,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          128,
+          0,
+          0,
+          0
+        ],
+        [
+          3,
+          0,
+          3,
+          0,
+          0,
+          95,
+          0,
+          0
+        ],
+        [
+          7,
+          0,
+          0,
+          0,
+          0,
+          0,
+          70,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          97
+        ]
+      ]
+    },
+    "fault_flagged_recall@0.5": 0.9898,
+    "false_alarm_rate_on_normal@0.5": 0.0274,
+    "ttf_mae_hours": 4.52,
+    "ttf_mae_baseline_mean_predictor_hours": 4.77,
+    "by_scenario": {
+      "bearing_degradation": {
+        "class_recall": 0.856,
+        "flagged_recall@0.5": 1.0,
+        "n": 104
+      },
+      "belt_abrasion": {
+        "class_recall": 0.941,
+        "flagged_recall@0.5": 0.99,
+        "n": 101
+      },
+      "belt_tension_degradation": {
+        "class_recall": 1.0,
+        "flagged_recall@0.5": 1.0,
+        "n": 128
+      },
+      "hydraulic_degradation": {
+        "class_recall": 1.0,
+        "flagged_recall@0.5": 1.0,
+        "n": 97
+      },
+      "idler_deterioration": {
+        "class_recall": 0.448,
+        "flagged_recall@0.5": 1.0,
+        "n": 87
+      },
+      "motor_overheating": {
+        "class_recall": 0.909,
+        "flagged_recall@0.5": 0.922,
+        "n": 77
+      },
+      "pulley_degradation": {
+        "class_recall": 0.674,
+        "flagged_recall@0.5": 1.0,
+        "n": 89
+      }
+    },
+    "by_severity": {
+      "HIGH": {
+        "class_recall": 0.9,
+        "flagged_recall@0.5": 1.0,
+        "n": 269
+      },
+      "LOW": {
+        "class_recall": 0.753,
+        "flagged_recall@0.5": 0.961,
+        "n": 178
+      },
+      "MEDIUM": {
+        "class_recall": 0.856,
+        "flagged_recall@0.5": 1.0,
+        "n": 236
+      }
+    },
+    "by_profile": {
+      "accelerating": {
+        "class_recall": 0.851,
+        "flagged_recall@0.5": 0.966,
+        "n": 174
+      },
+      "early_onset": {
+        "class_recall": 0.968,
+        "flagged_recall@0.5": 0.997,
+        "n": 343
+      },
+      "linear": {
+        "class_recall": 0.59,
+        "flagged_recall@0.5": 1.0,
+        "n": 166
+      }
+    }
+  },
+  "selected_on_validation": "random_forest",
+  "held_out_scenario_belt_abrasion": {
+    "n_windows": 101,
+    "flagged_as_risk@0.5": 0.861,
+    "predicted_class_distribution": {
+      "pulley_degradation": 86,
+      "idler_deterioration": 9,
+      "hydraulic_degradation": 4,
+      "belt_tension_degradation": 2
+    }
+  }
+}
