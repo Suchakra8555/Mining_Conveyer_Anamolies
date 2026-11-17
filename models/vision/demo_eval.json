@@ -1,0 +1,60 @@
+{
+ "disclaimer": "Heuristic DEMO detector on SYNTHETIC images; says nothing about real belt photographs.",
+ "images": 30,
+ "normal_images": 6,
+ "normal_images_with_false_detections": 0,
+ "per_class": {
+  "CRACK": {
+   "tp": 6,
+   "fp": 0,
+   "fn": 0,
+   "precision": 1.0,
+   "recall": 1.0
+  },
+  "TEAR": {
+   "tp": 6,
+   "fp": 0,
+   "fn": 0,
+   "precision": 1.0,
+   "recall": 1.0
+  },
+  "HOLE": {
+   "tp": 6,
+   "fp": 0,
+   "fn": 0,
+   "precision": 1.0,
+   "recall": 1.0
+  },
+  "ABRASION": {
+   "tp": 3,
+   "fp": 0,
+   "fn": 0,
+   "precision": 1.0,
+   "recall": 1.0
+  },
+  "EDGE_DAMAGE": {
+   "tp": 3,
+   "fp": 2,
+   "fn": 0,
+   "precision": 0.6,
+   "recall": 1.0
+  }
+ },
+ "confusion": {
+  "CRACK": {
+   "CRACK": 6
+  },
+  "TEAR": {
+   "TEAR": 6
+  },
+  "HOLE": {
+   "HOLE": 6
+  },
+  "ABRASION": {
+   "ABRASION": 3
+  },
+  "EDGE_DAMAGE": {
+   "EDGE_DAMAGE": 3
+  }
+ }
+}

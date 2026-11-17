@@ -1,0 +1,461 @@
+{
+ "synthetic": true,
+ "images": {
+  "normal_00.jpg": {
+   "annotations": [],
+   "kind": null,
+   "stage": 0
+  },
+  "normal_01.jpg": {
+   "annotations": [],
+   "kind": null,
+   "stage": 0
+  },
+  "normal_02.jpg": {
+   "annotations": [],
+   "kind": null,
+   "stage": 0
+  },
+  "normal_03.jpg": {
+   "annotations": [],
+   "kind": null,
+   "stage": 0
+  },
+  "normal_04.jpg": {
+   "annotations": [],
+   "kind": null,
+   "stage": 0
+  },
+  "normal_05.jpg": {
+   "annotations": [],
+   "kind": null,
+   "stage": 0
+  },
+  "defect_00_crack_s0.jpg": {
+   "annotations": [
+    {
+     "class": "CRACK",
+     "bbox": [
+      261,
+      193,
+      331,
+      215
+     ]
+    }
+   ],
+   "kind": "CRACK",
+   "stage": 0
+  },
+  "defect_00_crack_s1.jpg": {
+   "annotations": [
+    {
+     "class": "CRACK",
+     "bbox": [
+      239,
+      193,
+      349,
+      215
+     ]
+    }
+   ],
+   "kind": "CRACK",
+   "stage": 1
+  },
+  "defect_00_crack_s2.jpg": {
+   "annotations": [
+    {
+     "class": "CRACK",
+     "bbox": [
+      215,
+      193,
+      373,
+      215
+     ]
+    }
+   ],
+   "kind": "CRACK",
+   "stage": 2
+  },
+  "defect_01_tear_s0.jpg": {
+   "annotations": [
+    {
+     "class": "TEAR",
+     "bbox": [
+      129,
+      92,
+      251,
+      126
+     ]
+    }
+   ],
+   "kind": "TEAR",
+   "stage": 0
+  },
+  "defect_01_tear_s1.jpg": {
+   "annotations": [
+    {
+     "class": "TEAR",
+     "bbox": [
+      87,
+      85,
+      293,
+      133
+     ]
+    }
+   ],
+   "kind": "TEAR",
+   "stage": 1
+  },
+  "defect_01_tear_s2.jpg": {
+   "annotations": [
+    {
+     "class": "TEAR",
+     "bbox": [
+      42,
+      78,
+      338,
+      140
+     ]
+    }
+   ],
+   "kind": "TEAR",
+   "stage": 2
+  },
+  "defect_02_hole_s0.jpg": {
+   "annotations": [
+    {
+     "class": "HOLE",
+     "bbox": [
+      287,
+      92,
+      311,
+      112
+     ]
+    }
+   ],
+   "kind": "HOLE",
+   "stage": 0
+  },
+  "defect_02_hole_s1.jpg": {
+   "annotations": [
+    {
+     "class": "HOLE",
+     "bbox": [
+      278,
+      84,
+      320,
+      120
+     ]
+    }
+   ],
+   "kind": "HOLE",
+   "stage": 1
+  },
+  "defect_02_hole_s2.jpg": {
+   "annotations": [
+    {
+     "class": "HOLE",
+     "bbox": [
+      268,
+      76,
+      330,
+      128
+     ]
+    }
+   ],
+   "kind": "HOLE",
+   "stage": 2
+  },
+  "defect_03_abrasion_s0.jpg": {
+   "annotations": [
+    {
+     "class": "ABRASION",
+     "bbox": [
+      409,
+      163,
+      481,
+      199
+     ]
+    }
+   ],
+   "kind": "ABRASION",
+   "stage": 0
+  },
+  "defect_03_abrasion_s1.jpg": {
+   "annotations": [
+    {
+     "class": "ABRASION",
+     "bbox": [
+      385,
+      151,
+      505,
+      211
+     ]
+    }
+   ],
+   "kind": "ABRASION",
+   "stage": 1
+  },
+  "defect_03_abrasion_s2.jpg": {
+   "annotations": [
+    {
+     "class": "ABRASION",
+     "bbox": [
+      358,
+      138,
+      532,
+      225
+     ]
+    }
+   ],
+   "kind": "ABRASION",
+   "stage": 2
+  },
+  "defect_04_edge_damage_s0.jpg": {
+   "annotations": [
+    {
+     "class": "EDGE_DAMAGE",
+     "bbox": [
+      270,
+      0,
+      324,
+      16
+     ]
+    }
+   ],
+   "kind": "EDGE_DAMAGE",
+   "stage": 0
+  },
+  "defect_04_edge_damage_s1.jpg": {
+   "annotations": [
+    {
+     "class": "EDGE_DAMAGE",
+     "bbox": [
+      252,
+      0,
+      342,
+      28
+     ]
+    }
+   ],
+   "kind": "EDGE_DAMAGE",
+   "stage": 1
+  },
+  "defect_04_edge_damage_s2.jpg": {
+   "annotations": [
+    {
+     "class": "EDGE_DAMAGE",
+     "bbox": [
+      232,
+      0,
+      362,
+      40
+     ]
+    }
+   ],
+   "kind": "EDGE_DAMAGE",
+   "stage": 2
+  },
+  "defect_05_crack_s0.jpg": {
+   "annotations": [
+    {
+     "class": "CRACK",
+     "bbox": [
+      148,
+      218,
+      218,
+      236
+     ]
+    }
+   ],
+   "kind": "CRACK",
+   "stage": 0
+  },
+  "defect_05_crack_s1.jpg": {
+   "annotations": [
+    {
+     "class": "CRACK",
+     "bbox": [
+      126,
+      218,
+      236,
+      236
+     ]
+    }
+   ],
+   "kind": "CRACK",
+   "stage": 1
+  },
+  "defect_05_crack_s2.jpg": {
+   "annotations": [
+    {
+     "class": "CRACK",
+     "bbox": [
+      102,
+      218,
+      260,
+      236
+     ]
+    }
+   ],
+   "kind": "CRACK",
+   "stage": 2
+  },
+  "defect_06_tear_s0.jpg": {
+   "annotations": [
+    {
+     "class": "TEAR",
+     "bbox": [
+      397,
+      122,
+      519,
+      156
+     ]
+    }
+   ],
+   "kind": "TEAR",
+   "stage": 0
+  },
+  "defect_06_tear_s1.jpg": {
+   "annotations": [
+    {
+     "class": "TEAR",
+     "bbox": [
+      355,
+      115,
+      561,
+      163
+     ]
+    }
+   ],
+   "kind": "TEAR",
+   "stage": 1
+  },
+  "defect_06_tear_s2.jpg": {
+   "annotations": [
+    {
+     "class": "TEAR",
+     "bbox": [
+      310,
+      108,
+      606,
+      170
+     ]
+    }
+   ],
+   "kind": "TEAR",
+   "stage": 2
+  },
+  "defect_07_hole_s0.jpg": {
+   "annotations": [
+    {
+     "class": "HOLE",
+     "bbox": [
+      239,
+      144,
+      263,
+      164
+     ]
+    }
+   ],
+   "kind": "HOLE",
+   "stage": 0
+  },
+  "defect_07_hole_s1.jpg": {
+   "annotations": [
+    {
+     "class": "HOLE",
+     "bbox": [
+      230,
+      136,
+      272,
+      172
+     ]
+    }
+   ],
+   "kind": "HOLE",
+   "stage": 1
+  },
+  "defect_07_hole_s2.jpg": {
+   "annotations": [
+    {
+     "class": "HOLE",
+     "bbox": [
+      220,
+      128,
+      282,
+      180
+     ]
+    }
+   ],
+   "kind": "HOLE",
+   "stage": 2
+  }
+ },
+ "damaged_segments": [
+  {
+   "kind": "CRACK",
+   "files": [
+    "defect_00_crack_s0.jpg",
+    "defect_00_crack_s1.jpg",
+    "defect_00_crack_s2.jpg"
+   ]
+  },
+  {
+   "kind": "TEAR",
+   "files": [
+    "defect_01_tear_s0.jpg",
+    "defect_01_tear_s1.jpg",
+    "defect_01_tear_s2.jpg"
+   ]
+  },
+  {
+   "kind": "HOLE",
+   "files": [
+    "defect_02_hole_s0.jpg",
+    "defect_02_hole_s1.jpg",
+    "defect_02_hole_s2.jpg"
+   ]
+  },
+  {
+   "kind": "ABRASION",
+   "files": [
+    "defect_03_abrasion_s0.jpg",
+    "defect_03_abrasion_s1.jpg",
+    "defect_03_abrasion_s2.jpg"
+   ]
+  },
+  {
+   "kind": "EDGE_DAMAGE",
+   "files": [
+    "defect_04_edge_damage_s0.jpg",
+    "defect_04_edge_damage_s1.jpg",
+    "defect_04_edge_damage_s2.jpg"
+   ]
+  },
+  {
+   "kind": "CRACK",
+   "files": [
+    "defect_05_crack_s0.jpg",
+    "defect_05_crack_s1.jpg",
+    "defect_05_crack_s2.jpg"
+   ]
+  },
+  {
+   "kind": "TEAR",
+   "files": [
+    "defect_06_tear_s0.jpg",
+    "defect_06_tear_s1.jpg",
+    "defect_06_tear_s2.jpg"
+   ]
+  },
+  {
+   "kind": "HOLE",
+   "files": [
+    "defect_07_hole_s0.jpg",
+    "defect_07_hole_s1.jpg",
+    "defect_07_hole_s2.jpg"
+   ]
+  }
+ ]
+}
