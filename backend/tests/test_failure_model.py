@@ -15,7 +15,7 @@ START = datetime(2025, 1, 1, tzinfo=timezone.utc)
 @pytest.fixture(scope="module")
 def windows():
     sim = ConveyorSimulator(SimConfig(seed=5), start=START)
-    plan = [{"station_id": "ST-001", "scenario": "bearing_degradation", "duration_h": 40, "start": START.timestamp() + 2 * 3600}]
+    plan = [{"station_id": "ST-001", "scenario": "bearing_degradation", "duration_h": 40, "start": START.timestamp() + 10 * 3600}]
     f, t = sim.generate_historical_dataset(START, days=3, degradation_plan=plan)
     s = f[f.station_id == "ST-001"]
     W = build_station_windows(s)

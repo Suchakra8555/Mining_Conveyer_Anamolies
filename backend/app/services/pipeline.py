@@ -89,8 +89,22 @@ class Pipeline:
             if warm > 0:
                 self._warm_start(warm, demo_scenarios)
             with session_scope(self.Session) as db:
+                if warm > 6:
+                    self._backfill_predictions(db, hours=min(warm - 1, 10), step_min=60)
                 self._inference(db, force=True)
                 self._health(db)
+
+    def _backfill_predictions(self, db, hours: float, step_min: int):
+        """Run the failure model at past times (using only data up to each time) so risk trends exist from the start."""
+        end = from_epoch(self.sim.now)
+        t = end - timedelta(hours=hours)
+        while t < end:
+            for st in db.execute(select(SensorStation)).scalars():
+                raw = self.mask_bad(self._station_frame(db, st.id, FAIL_WINDOW_H, t))
+                if len(raw) >= 60:
+                    self._run_failure(db, st, raw, t)
+            t += timedelta(minutes=step_min)
+        db.flush()
 
     def _warm_start(self, warm: float, demo: bool):
         t_end = self.sim.now + warm * 3600

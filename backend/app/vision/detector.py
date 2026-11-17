@@ -85,7 +85,7 @@ class HeuristicDemoDetector:
             fill = area / float(bw * bh)
             depth = float(-diff[y:y + bh, x:x + bw][m > 0].mean())
             touches_edge = y <= 14 or (y + bh) >= h - 14
-            if touches_edge and bw >= 30:
+            if touches_edge and bw >= 30 and bh >= 12:      # a real notch has depth; thin border slivers are artefacts
                 cls = "EDGE_DAMAGE"
             elif area / max(major, 1.0) <= 7 and major >= 40:    # thin: mean thickness (area/length) <= 7 px
                 cls = "CRACK"
