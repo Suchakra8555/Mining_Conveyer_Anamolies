@@ -9,3 +9,7 @@ data/generated/*
 !data/generated/.gitkeep
 .env
 .pytest_cache/
+*.db-shm
+*.db-wal
+data/vision/annotated/
+data/vision/uploads/
