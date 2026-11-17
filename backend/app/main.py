@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import analysis, conveyors, simulation, system, vision
+from app.api import analysis, conveyors, simulation, system, vision, ws
 from app.core.config import REPO_ROOT, Settings, get_settings
 from app.services.pipeline import Pipeline
 
@@ -56,7 +56,7 @@ def create_app(settings: Settings | None = None, warm_start: bool = True) -> Fas
     app = FastAPI(title="Mining Conveyor Monitoring API", version="1.0", lifespan=lifespan,
                   description="Simulated conveyor monitoring: research-based anomaly detection, failure-risk prediction, vision.")
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
-    for r in (system.router, conveyors.router, analysis.router, vision.router, simulation.router):
+    for r in (system.router, conveyors.router, analysis.router, vision.router, simulation.router, ws.router):
         app.include_router(r)
 
     dist = REPO_ROOT / "frontend" / "dist"

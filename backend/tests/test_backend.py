@@ -149,3 +149,14 @@ def test_ingestion_does_not_run_inference_and_processor_is_idempotent(client):
     with p.Session() as db:
         after = {s.station_name: s.last_processed_timestamp for s in db.execute(select(SensorStation)).scalars()}
     assert all(after[k] >= before_wm[k] for k in after if before_wm[k]) and any(after[k] > before_wm[k] for k in after if before_wm[k])
+
+
+def test_websocket_pushes_update_notifications(client):
+    with client.websocket_connect("/api/ws") as w:
+        first = w.receive_json()
+        assert first["type"] == "update" and "version" in first
+        client.post("/api/simulation/step?n=1")
+        msg = w.receive_json()
+        while msg["version"] <= first["version"]:
+            msg = w.receive_json()
+        assert msg["tick"] >= first["tick"]

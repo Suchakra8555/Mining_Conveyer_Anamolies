@@ -31,6 +31,17 @@ NORMAL_SEQUENCES = ("CDC", "CD")
 EXTRA = 3                                # minutes inspected before/after a detected cycle
 
 
+class _Encoded:
+    """Lets estimators that need integer labels (XGBoost) work with the A/B/C/D letters."""
+    def __init__(self, est):
+        self.est = est
+    def fit(self, X, y):
+        self.est.fit(X, np.array([CODE[v] for v in y]))
+        return self
+    def predict(self, X):
+        return np.array([STATES[i] for i in self.est.predict(X)])
+
+
 def make_classifier(name: str, seed: int = 42):
     if name == "xtree":
         return ExtraTreesClassifier(n_estimators=25, max_depth=10, random_state=seed, class_weight="balanced")
@@ -40,6 +51,12 @@ def make_classifier(name: str, seed: int = 42):
         return DecisionTreeClassifier(max_depth=10, min_samples_split=10, random_state=seed, class_weight="balanced")
     if name == "mlp":
         return MLPClassifier(hidden_layer_sizes=(16,), max_iter=300, random_state=seed)
+    if name == "nb":
+        from sklearn.naive_bayes import GaussianNB
+        return GaussianNB()
+    if name == "xgb":
+        from xgboost import XGBClassifier    # optional dependency
+        return _Encoded(XGBClassifier(n_estimators=25, max_depth=6, learning_rate=0.2, random_state=seed, n_jobs=1))
     raise ValueError(name)
 
 

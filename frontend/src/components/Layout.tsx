@@ -2,11 +2,13 @@ import { NavLink, Outlet } from "react-router-dom";
 import { Activity, AlertTriangle, Camera, Gauge, LayoutDashboard, Radio, SlidersHorizontal, TrendingDown } from "lucide-react";
 import { useSim } from "../hooks/useApi";
 import { when } from "./ui";
+import { useLive } from "../hooks/useLive";
 
 const NAV = [["/", "Overview", LayoutDashboard], ["/conveyor", "Conveyor Monitoring", Activity], ["/stations", "Sensor Stations", Gauge], ["/anomalies", "Anomalies", AlertTriangle],
   ["/predictions", "Failure Predictions", TrendingDown], ["/vision", "Vision Inspection", Camera], ["/simulation", "Simulation Controls", SlidersHorizontal]] as const;
 
 export default function Layout() {
+  useLive();
   const { data: sim, isError } = useSim();
   return (
     <div className="flex min-h-screen">

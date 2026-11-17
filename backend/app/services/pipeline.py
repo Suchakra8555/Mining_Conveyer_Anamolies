@@ -50,6 +50,7 @@ class Pipeline:
         self.last_inference_tick = -1
         self.vision_log: list[dict] = []
         self.pending_captures: list[tuple] = []
+        self.version = 0            # bumped on every ingestion tick and processor run; pushed to WebSocket clients
 
     @staticmethod
     def _load(cls, path):
@@ -143,6 +144,7 @@ class Pipeline:
                 db.add_all(rows)
                 crossed = self.tracker.advance(float(np.mean(belt) if belt else 0.0) * self.sim.step_seconds)
                 self.pending_captures += [(i, now, self.tracker.passes.get(i, 1)) for i in crossed]   # analysed by the background processor
+            self.version += 1
             return {"tick": self.sim.tick, "simulated_time": now.isoformat(), "readings": len(readings), "segments_crossed": len(crossed)}
 
     def _vision_capture(self, db, captures: list[tuple]):
@@ -207,6 +209,7 @@ class Pipeline:
                         a.status, a.resolved_at = "RESOLVED", newest_all
                 db.flush()
                 self._health(db, newest_all)
+            self.version += 1
             return {"stations_processed": done}
 
     def _process_station(self, db, st, newest, lp) -> bool:

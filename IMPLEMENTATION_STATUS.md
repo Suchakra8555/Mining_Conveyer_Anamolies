@@ -29,11 +29,23 @@ Last updated at the end of the build session. "Verified" means I ran it and look
 - **Degradation fools the state classifier (false "unexpected stop").** In the live demo ST-008 (simulated hydraulic degradation) lowers idle high-pressure from ~30 to ~20 bar. The state classifier was trained on healthy pressures, labels those idle minutes `A` (off) instead of `B` (idle), and Approach 2 then reports `UNEXPECTED_STOP` for cycles whose state sequence is a normal `CDC` (confirmed from the stored evidence and raw readings). The two models interact badly: a failing hydraulic system looks like a stopped drive. Not fixed (needs training the state classifier on degraded data or normalising idle pressure); the anomaly evaluation above does not cover this because test data contains no degradation during cycles.
 - ST-002 shows a vibration anomaly plus an idler-wear prediction because the injected vibration anomaly resembles idler degradation (see README).
 
-## Not done
-Approach 3; Docker / Compose; XGBoost/Naive-Bayes comparison; matplotlib evaluation plots (confusion matrices are in the JSON/README as numbers); a real vision dataset; WebSockets; quantisation; Claude Code session transcript export (see `ai_usage/`).
+## Added after the first status report
+| Item | State |
+|---|---|
+| Approach 3 (learned duty-cycle classifier), compared with Approach 2 | done, `approach3.py`, `approach3_metrics.json`, README |
+| XGBoost and Gaussian Naive Bayes state-classifier comparison | done; XGBoost won validation and is the deployed state classifier (adds an `xgboost` dependency) |
+| Evaluation plots (matplotlib) | done, `docs/figures/`, generated from the metrics JSON |
+| uint8 input quantisation | done and evaluated; **no real size/latency saving shown** (inputs only; needs C export) |
+| WebSockets | done as an optional "something changed" push; polling remains; tested |
+| Docker / Compose | files written, `docker compose config` valid; **image never built** (no daemon) |
+| Claude Code transcript | rendered to `ai_usage/transcript-claude-code.md` by `scripts/export_transcript.py` (e-mail redacted, tool output truncated, thinking omitted) |
+
+## Still not done
+A real vision dataset (blocked, below); C export / real MCU quantisation; GridSearchCV tuning as in the paper; Mermaid rendering check.
 
 ## Blocked
-- Kaggle, Hugging Face, Roboflow, Zenodo and the PyTorch wheel index are not reachable from the build sandbox (proxy refusals), so no real conveyor-defect dataset or pretrained weights, and no torch/ultralytics.
+- Kaggle, Hugging Face, Roboflow, Zenodo and the PyTorch wheel index are not reachable from the build sandbox (proxy refusals; re-checked when the remaining items were done), so no real conveyor-defect dataset or pretrained weights, and no torch/ultralytics. A second GitHub search with licence filters found one CC0 repository that looks related (5 KB, so it cannot hold images; its data is hosted elsewhere). I did not attach or rely on it.
+- Docker daemon is not running in the sandbox, so the image cannot be built here.
 
 ## Metrics near 1.0: investigation log (PRD update 2)
 
@@ -54,3 +66,8 @@ Rule applied: any metric near 1.0 is treated as a possible leak or an easy simul
 - shadcn/ui not installed; hand-written Tailwind primitives.
 - Python 3.13 instead of 3.12.
 - Anomaly model file is named `state_classifier.joblib` (the validation winner can change between runs).
+
+## Update: classifier comparison and Approach 3 (second evaluation pass)
+- Adding XGBoost and Naive Bayes changed the validation winner from the decision tree to XGBoost (abnormal F1 0.990 vs 0.965). All anomaly test numbers in the README were refreshed from the regenerated `metrics.json`; the shuffled-label (0.199) and trivial-baseline (0.955) diagnostics are unchanged.
+- Approach 3 gets precision 1.0 / FPR 0.0 on test. That is another "near 1.0" result; cause identified: it treats unseen sequence patterns as normal, so it is precise but misses the held-out intermittent family entirely (recall 0.0). Its validation scores tie across all six classifiers because validation has no unseen patterns.
+- uint8 quantisation gave identical accuracy and no real saving; reported as such.

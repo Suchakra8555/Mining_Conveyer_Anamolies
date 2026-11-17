@@ -25,6 +25,18 @@
       "abnormal_f1": 0.8877,
       "recall": 0.7981,
       "fpr": 0.0
+    },
+    "nb": {
+      "state_macro_f1": 0.9831,
+      "abnormal_f1": 0.6133,
+      "recall": 0.4423,
+      "fpr": 0.0
+    },
+    "xgb": {
+      "state_macro_f1": 0.9879,
+      "abnormal_f1": 0.9903,
+      "recall": 0.9808,
+      "fpr": 0.0
     }
   },
   "test": {
@@ -34,10 +46,10 @@
     ],
     "noise_scale": 1.5,
     "benign_prob": 0.25,
-    "deployed_classifier": "dt",
+    "deployed_classifier": "xgb",
     "state_macro_f1": [
-      0.9843,
-      0.9841
+      0.9871,
+      0.9864
     ],
     "state_confusion_matrix_seed2001": {
       "labels": [
@@ -48,88 +60,88 @@
       ],
       "matrix": [
         [
-          51571,
-          55,
+          51553,
+          71,
           0,
-          0
+          2
         ],
         [
-          169,
-          52114,
-          594,
-          1
+          116,
+          52460,
+          299,
+          3
         ],
         [
           0,
-          56,
-          12819,
-          75
+          147,
+          12503,
+          300
         ],
         [
-          2,
           0,
-          575,
-          83569
+          0,
+          302,
+          83844
         ]
       ]
     },
     "cycle_level": {
-      "precision": 0.6623,
-      "recall": 0.9668,
-      "f1": 0.7861,
-      "false_positive_rate": 0.0831,
-      "false_negative_rate": 0.0332,
+      "precision": 0.6918,
+      "recall": 0.9573,
+      "f1": 0.8032,
+      "false_positive_rate": 0.0719,
+      "false_negative_rate": 0.0427,
       "confusion": {
-        "tp": 408,
-        "fp": 208,
-        "fn": 14,
-        "tn": 2294
+        "tp": 404,
+        "fp": 180,
+        "fn": 18,
+        "tn": 2322
       },
       "n_cycles": 2924,
       "n_abnormal": 422,
       "recall_by_scenario": {
         "ABNORMAL_STARTUP": [
-          0.925,
+          0.898,
           147
         ],
         "INTERMITTENT_OPERATION": [
-          0.986,
+          1.0,
           145
         ],
         "UNEXPECTED_STOP": [
-          0.992,
+          0.977,
           130
         ]
       },
       "recall_by_severity": {
         "LOW": [
-          0.922,
+          0.93,
           129
         ],
         "MEDIUM": [
-          0.985,
+          0.97,
           132
         ],
         "HIGH": [
-          0.988,
+          0.969,
           161
         ]
       },
       "recall_by_scenario_and_severity": {
         "ABNORMAL_STARTUP/LOW": [
-          0.865,
+          0.885,
           52
         ],
         "ABNORMAL_STARTUP/MEDIUM": [
-          0.955,
+          0.909,
           44
         ],
         "ABNORMAL_STARTUP/HIGH": [
-          0.961,
+          0.902,
           51
         ],
         "INTERMITTENT_OPERATION/LOW": [
-          0.943,
+          1.0,
           35
         ],
         "INTERMITTENT_OPERATION/MEDIUM": [
@@ -141,7 +153,7 @@
           65
         ],
         "UNEXPECTED_STOP/LOW": [
-          0.976,
+          0.929,
           42
         ],
         "UNEXPECTED_STOP/MEDIUM": [
@@ -155,7 +167,7 @@
       },
       "false_positive_rate_by_benign_variant": {
         "-": [
-          0.003,
+          0.0,
           1863
         ],
         "SLOW_STARTUP": [
@@ -163,7 +175,7 @@
           218
         ],
         "SHORT_PAUSE": [
-          0.967,
+          0.857,
           210
         ],
         "LOAD_SPIKE": [
@@ -313,11 +325,11 @@
       }
     ]
   },
-  "selected_on_validation": "dt",
+  "selected_on_validation": "xgb",
   "diagnostics": {
     "shuffled_label_state_macro_f1": 0.199,
     "trivial_speed_threshold_state_macro_f1": 0.955,
     "feature_columns_contain_truth": false
   },
-  "inference_ms_per_6h_window": 20.19
+  "inference_ms_per_6h_window": 22.27
 }

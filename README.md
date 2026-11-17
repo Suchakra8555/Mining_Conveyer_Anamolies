@@ -31,6 +31,8 @@ cd frontend && npm install && npm run build && cd ..
 cd backend && python -m uvicorn app.main:app --port 8000     # http://localhost:8000
 ```
 
+Docker (written, not built here): `docker compose up --build`, then http://localhost:8000.
+
 The backend serves the built dashboard and the API (docs at `/docs`). On start-up it generates 12 hours of simulated history with a few scenarios already running, then keeps simulating live (one tick every 2 s, 30× speed by default: one tick = one simulated minute). For frontend development run `npm run dev` in `frontend/` (proxies `/api` to port 8000).
 
 Trained models are committed in `models/`. To retrain and regenerate the metrics files:
@@ -40,7 +42,9 @@ cd backend
 python -m app.ml.anomaly_detection.train      # under a minute
 python -m app.ml.failure_prediction.train     # ~3 min
 python -m app.vision.evaluate                 # synthetic-image demo evaluation
-python -m pytest tests -q                     # 56 tests
+python -m pytest tests -q                     # 57 tests
+python -m app.ml.anomaly_detection.extra_eval # Approach 3 + uint8 quantisation
+python -m app.ml.plots                        # figures in docs/figures
 ```
 
 ## The problem and my approach
@@ -60,7 +64,7 @@ I deliberately did **not** let one model decide station health. Anomalies (odd b
 ### Design decisions (short version; reasoning in [ADRs](docs/decisions/architecture-decisions.md))
 
 - **Modular monolith, FastAPI + SQLite + React.** One process, no queue, no broker. The load is 5 readings/second. SQLAlchemy keeps PostgreSQL possible.
-- **Polling every 2.5 s, no WebSockets.** Simpler, and the dashboard keeps its last data if the API drops.
+- **Polling every 2.5 s, plus an optional WebSocket push.** Polling is the base mechanism and the dashboard keeps its last data if the API drops. `/api/ws` only announces that something changed; the browser then refetches the REST endpoints, so REST stays the single source of truth.
 - **Ingestion and inference are separate.** Ingestion only validates and stores. A background asyncio task (every 5 s, `INFERENCE_INTERVAL_S`) processes readings newer than each station's `last_processed_timestamp`, idempotently; no model runs in a request handler except the explicit `/api/vision/analyze` upload endpoint.
 - **Two separate ML models.** The paper detects abnormal duty cycles; it does not predict component failure. Mixing them would pass off one as the other.
 - **Ground truth lives outside the feature path.** The simulator returns labels in a separate table. Failure windows use only past data (tested).
@@ -89,7 +93,7 @@ Reference: Martinez-Rau et al., *On-device Anomaly Detection in Conveyor Belt Op
 4. A data gap around a cycle gives `INDETERMINATE`, not `ABNORMAL`. The paper treats missing data as abnormal; I don't think a dropped sensor should be reported as a faulty conveyor.
 5. Added a category and severity (unexpected stop / abnormal start-up / intermittent operation) on top of the paper's binary label. Severity is a fixed rule, not learned.
 6. Cycles cut off by the analysis window are skipped, which removed a false-alarm bug in streaming use.
-7. Approach 3 (learned duty-cycle classifier) is not implemented.
+7. Approach 3 (learned duty-cycle classifier) is implemented separately in `approach3.py` and compared below; the deployed path is Approach 2.
 
 Extension (not in the paper): `signal_checks.py` raises value-level anomalies (overload, slippage, vibration, temperature, hydraulic fluctuation) with plain threshold rules, because Approach 2 only sees cycle *structure*. Thresholds are calibrated to the simulator.
 
@@ -104,28 +108,51 @@ Because I wrote both the simulator and the models, a model can score well just b
 
 > **All results below are on synthetic simulator data. They measure this pipeline only and are not comparable to the paper's published numbers** (different data, different task framing, different splits).
 
-**Approach 2 results (test seeds 2001+2002, 2,924 cycles, 422 abnormal; full file `models/anomaly_detection/metrics.json`).** Classifier chosen on validation: decision tree (abnormal-cycle F1 on validation: DT 0.965, ExtraTrees 0.960, RF 0.950, MLP 0.888).
+**Approach 2 results (test seeds 2001+2002, 2,924 cycles, 422 abnormal; full file `models/anomaly_detection/metrics.json`).** State classifier chosen on validation: **XGBoost** (abnormal-cycle F1 on validation: XGBoost 0.990, decision tree 0.965, ExtraTrees 0.960, random forest 0.950, MLP 0.888, Gaussian Naive Bayes 0.613). The model file `models/anomaly_detection/state_classifier.joblib` is the validation winner refit on train+validation.
 
 | | Value |
 |---|---|
-| Precision / recall / F1 (abnormal) | **0.662 / 0.967 / 0.786** |
-| False-positive rate / false-negative rate | **0.083** / 0.033 |
-| Confusion (TP / FP / FN / TN) | 408 / 208 / 14 / 2,294 |
-| State classifier macro-F1 (two seeds) | 0.984, 0.984 |
-| Inference | ~20 ms for a 6-hour window of one station (includes feature extraction) |
+| Precision / recall / F1 (abnormal) | **0.692 / 0.957 / 0.803** |
+| False-positive rate / false-negative rate | **0.072** / 0.043 |
+| Confusion (TP / FP / FN / TN) | 404 / 180 / 18 / 2,322 |
+| State classifier macro-F1 (two seeds) | 0.987, 0.986 |
+| Inference | ~22 ms for a 6-hour window of one station (includes feature extraction) |
 
 | Recall by scenario | | Recall by severity | | FPR on normal cycles by variant | |
 |---|---|---|---|---|---|
-| Abnormal start-up | 0.925 | LOW | 0.922 | no oddity | 0.003 |
-| Intermittent operation (held out of training) | 0.986 | MEDIUM | 0.985 | slow start-up | 0.000 |
-| Unexpected stop | 0.992 | HIGH | 0.988 | load spike | 0.000 |
-| | | | | **short pause** | **0.967** |
+| Abnormal start-up | 0.898 | LOW | 0.930 | no oddity | 0.000 |
+| Intermittent operation (held out of training) | 1.000 | MEDIUM | 0.970 | slow start-up | 0.000 |
+| Unexpected stop | 0.977 | HIGH | 0.969 | load spike | 0.000 |
+| | | | | **short pause** | **0.857** |
 
-What this says: the paper's pattern-matching rule treats a healthy 2-minute pause in the middle of a cycle as an intermittent-operation anomaly (97 % of those were flagged), which is where nearly all false positives come from. That is a real limitation of the rule, and the test only shows it because I added benign pauses. Recall is high across severities because cycle anomalies change the state sequence in a very structured way.
+What this says: the paper's pattern-matching rule treats a healthy 2-minute pause in the middle of a cycle as an intermittent-operation anomaly (86 % of those were flagged), which is where nearly all false positives come from. That is a real limitation of the rule, and the test only shows it because I added benign pauses. Recall is high across severities because cycle anomalies change the state sequence in a very structured way.
 
 **Rule-based value checks (my extension) are weak under this protocol.** Mean recall by severity across the five anomaly kinds: LOW 0.04, MEDIUM 0.32, HIGH 0.51 (per kind and severity in the metrics file; e.g. motor overload is almost never caught), with a 6.4 % false-alarm rate on normal 30-minute windows. The thresholds were calibrated at noise ×1.0 and do not hold at ×1.5. I did not retune them on the test data. They should be treated as a placeholder, not a detector.
 
-**Why the high numbers need a caveat (logged in `IMPLEMENTATION_STATUS.md`).** State macro-F1 of 0.984 looks excellent, but a three-line speed-threshold rule already scores 0.955 on the same data, while a classifier trained on shuffled labels scores 0.199. So there is no leakage, but the state task is too easy: simulator modes differ strongly in speed. Cycle recall near 0.99 for the structured anomalies is for the same reason.
+**Why the high numbers need a caveat (logged in `IMPLEMENTATION_STATUS.md`).** State macro-F1 of 0.987 looks excellent, but a three-line speed-threshold rule already scores 0.955 on the same data, while a classifier trained on shuffled labels scores 0.199. So there is no leakage, but the state task is too easy: simulator modes differ strongly in speed. Cycle recall of 0.90–1.00 for the structured anomalies is for the same reason.
+
+### Approach 3 (learned duty-cycle classifier) and the other classifiers
+
+`approach3.py` implements the paper's Approach 3: the same state classifier and speed-threshold cycle detection, but the normal/abnormal decision comes from a classifier trained on the padded, encoded state sequence of each cycle (± 3 min), instead of the fixed `CDC`/`CD` patterns. All six classifiers from the paper's list (RF, decision tree, ExtraTrees, XGBoost, Naive Bayes, MLP) were run for the state classifier (table above) and for the duty-cycle classifier. Same data protocol; `python -m app.ml.anomaly_detection.extra_eval`, output `models/anomaly_detection/approach3_metrics.json`. This is a separate run with an ExtraTrees state classifier, so its Approach 2 row differs slightly from the table above.
+
+| Test (2 seeds) | Precision | Recall | FPR | Recall: intermittent (held out) | FPR on short pauses |
+|---|---|---|---|---|---|
+| Approach 2 (rules) | 0.673 | 0.950 | 0.078 | 1.000 | 0.929 |
+| Approach 3 (learned, random forest) | 1.000 | 0.611 | 0.000 | **0.000** | 0.000 |
+
+![Approach 2 vs 3](docs/figures/approach2_vs_approach3.png)
+
+The learned classifier never saw an intermittent cycle or a pause in training, so it treats those unseen sequences as normal: perfect precision, but it misses the whole held-out anomaly family. The fixed rules catch it but also fire on healthy pauses. Neither is "better"; they fail in opposite directions on patterns outside the training data. Caveat: on the validation split all six duty-cycle classifiers tie exactly (F1 0.9652), because validation contains no unseen patterns, so choosing among them there was a coin flip (random forest, first in the list). Gaussian Naive Bayes was clearly the weakest *state* classifier (validation F1 0.613).
+
+### uint8 quantisation (the paper's microcontroller variant)
+
+`quantization.py` min-max scales features to 0–255 integers before the classifier at both training and inference time. Result on the test seeds (ExtraTrees): state macro-F1 0.9871 vs 0.9871, cycle-level F1 0.790 vs 0.788, model size 3.23 MB vs 3.27 MB, latency 8.3 ms vs 9.0 ms. In other words the quantised-input model is as accurate, but **I did not show a real size or latency saving**: only the inputs are quantised, scikit-learn keeps float thresholds, and a real saving needs a C export, which I did not do.
+
+### Evaluation figures
+
+Generated from the metrics files by `python -m app.ml.plots` (nothing recomputed): [anomaly detection](docs/figures/anomaly_detection_test.png), [failure model](docs/figures/failure_model_test.png), [approach comparison](docs/figures/approach2_vs_approach3.png), [candidate comparison on validation](docs/figures/state_classifier_candidates_validation.png).
+
+![Failure model](docs/figures/failure_model_test.png)
 
 ## Failure-risk prediction (my extension)
 
@@ -198,7 +225,7 @@ API (full list in [api-design](docs/api/api-design.md), interactive docs at `/do
 
 ## Testing
 
-`backend/tests`: 56 tests, all passing at the time of writing: simulator (positions, reproducibility, correlations, ground-truth separation, transitions), anomaly pipeline (features, gaps, pattern matching, unexpected-stop, incomplete cycles), failure model (no label leakage, past-only features, temporal split, shipped model sanity), vision (loading, CPU inference, tracker modulo logic, duplicate handling), and the API end to end with a real SQLite file (ingestion, persistence, pagination, scenario injection → anomaly → station status, quality handling). I also ran the full app and drove it through a browser. No test covers the frontend code itself.
+`backend/tests`: 57 tests, all passing at the time of writing: simulator (positions, reproducibility, correlations, ground-truth separation, transitions), anomaly pipeline (features, gaps, pattern matching, unexpected-stop, incomplete cycles), failure model (no label leakage, past-only features, temporal split, shipped model sanity), vision (loading, CPU inference, tracker modulo logic, duplicate handling), and the API end to end with a real SQLite file (ingestion, persistence, pagination, scenario injection → anomaly → station status, quality handling). I also ran the full app and drove it through a browser. No test covers the frontend code itself.
 
 ## Assumptions and limitations
 
@@ -208,7 +235,8 @@ API (full list in [api-design](docs/api/api-design.md), interactive docs at `/do
 - shadcn/ui was not installed; `components/ui.tsx` has a few hand-written Tailwind components in that style.
 - No authentication, no retention policy (at 10 stations × 0.5 Hz readings grow ~430k rows per real-time day), SQLite single-writer.
 - `reset` wipes the database.
-- Docker/Compose, Approach 3, quantisation, evaluation plots (matplotlib figures) and WebSockets were not done.
+- Docker: `Dockerfile` and `docker-compose.yml` are written and `docker compose config` validates, but **the image was never built** (no Docker daemon in the build sandbox). The image uses Python 3.12 while I tested on 3.13.
+- Not done: a real vision dataset (blocked, see above), C export for real quantisation savings, the paper's GridSearchCV tuning.
 
 ## What I would do differently with more time
 
@@ -217,7 +245,7 @@ API (full list in [api-design](docs/api/api-design.md), interactive docs at `/do
 3. Use more degradation episodes with randomised physics so the model cannot just learn my simulator's equations; evaluate with episode-grouped cross-validation instead of a single split.
 4. Re-sync belt position from splice detection; require confirmation across passes; model both belt faces.
 5. Move readings to a time-series store with retention/downsampling; add auth; add frontend tests.
-6. Implement Approach 3 and compare against Approach 2 properly.
+6. Compare Approaches 2 and 3 on a simulator with many more unseen cycle patterns, and tune hyper-parameters with grouped cross-validation.
 
 ## References
 

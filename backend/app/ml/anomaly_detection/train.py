@@ -147,7 +147,7 @@ def main():
     gt_va = gt[gt["start"] >= cut]
     report = {"protocol": __doc__, "note": "All results are on SYNTHETIC simulator data. They measure this pipeline only and are NOT comparable to the paper's published numbers.", "validation": {}, "test": {}}
     best, best_f1 = None, -1
-    for name in ["xtree", "rf", "dt", "mlp"]:
+    for name in ["xtree", "rf", "dt", "mlp", "nb", "xgb"]:
         d = AnomalyDetector(name).fit(tr, tr["true_state"])
         r, sf1, _ = eval_cycles(d, va, gt_va, sids)
         sm = summarise(r); report["validation"][name] = {"state_macro_f1": round(float(sf1), 4), "abnormal_f1": sm["f1"], "recall": sm["recall"], "fpr": sm["false_positive_rate"]}

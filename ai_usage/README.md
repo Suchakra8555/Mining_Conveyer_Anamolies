@@ -1,6 +1,6 @@
 # AI usage
 
-This project was built in one Claude Code session (model: Claude Sonnet 5.5) working from a detailed PRD that I (the repository owner) wrote with AI help beforehand. Below is what the assistant did, where its output was changed or rejected, and what I decided. The full transcript is **not** included in this folder yet: see `links.md` for how it should be captured, and note that I did not fabricate or paraphrase one.
+This project was built in one Claude Code session (model: Claude Sonnet 5.5) working from a detailed PRD that I (the repository owner) wrote with AI help beforehand. Below is what the assistant did, where its output was changed or rejected, and what I decided. A rendered transcript of the session is in `transcript-claude-code.md` (generated from the raw session log by `scripts/export_transcript.py`: user messages and assistant text are verbatim; tool inputs/outputs are truncated; images and thinking blocks are omitted; the owner's e-mail is redacted). Nothing was written or edited by hand.
 
 ## What the assistant did
 - Inspected the empty repository, cloned and read the official research implementation, and re-implemented Approach 2 with documented deviations.
@@ -26,4 +26,7 @@ These are from the session itself, not reconstructed:
 - Not naming a vision dataset I could not verify; documenting the fallback instead.
 
 ## What the assistant could not do
-Download any real dataset or weights; test the YOLO path; run a Mermaid renderer; capture its own transcript into this folder.
+Download any real dataset or weights; test the YOLO path; run a Mermaid renderer; build the Docker image (no daemon).
+
+## Later in the session
+After the first hand-off the user asked for the items listed as "not done". The assistant did Approach 3, XGBoost/Naive Bayes, plots, uint8 quantisation, WebSocket push, Docker files and the transcript export, and reported the ones it could not finish (real dataset, Docker build) instead of faking them. One result it did not expect: adding XGBoost changed which classifier won validation, so previously written README numbers had to be redone.
