@@ -28,6 +28,10 @@ class SimConfig:
     abnormal_cycle_prob: float = 0.0         # probability a generated cycle is abnormal
     p_missing: float = 0.002                 # per-channel random missing probability
     noise_scale: float = 1.0
+    channel_noise: dict = field(default_factory=dict)   # per-channel multiplier on top of noise_scale, e.g. {'vibration': 2.0}
+    held_out_cycle_kinds: tuple = ()          # abnormal cycle kinds never generated (for held-out-variant evaluation)
+    held_out_benign: tuple = ()               # benign oddities never generated
+    benign_prob: float = 0.0                 # probability a NORMAL cycle contains a benign oddity (labelled normal)
     cycle_speed_threshold_rpm: float = 2.5   # duty-cycle detection threshold (calibrated to simulator idle noise)
 
     def with_(self, **kw) -> "SimConfig":
@@ -40,7 +44,7 @@ class Settings:
     autostart: bool = field(default_factory=lambda: _env("SIM_AUTOSTART", "true").lower() == "true")
     warm_start_hours: float = field(default_factory=lambda: float(_env("SIM_WARM_START_HOURS", "12")))
     sim_speed: float = field(default_factory=lambda: float(_env("SIM_SPEED", "30")))
-    inference_every_n_ticks: int = 5
+    inference_interval_s: float = field(default_factory=lambda: float(_env("INFERENCE_INTERVAL_S", "5")))
     vision_weights: Path = field(default_factory=lambda: REPO_ROOT / _env("VISION_WEIGHTS", "models/vision/conveyor_defect.pt"))
     sim: SimConfig = field(default_factory=lambda: SimConfig(seed=int(_env("SIM_SEED", "42"))))
 

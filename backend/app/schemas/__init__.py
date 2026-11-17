@@ -67,6 +67,7 @@ class ScenarioRequest(BaseModel):
     kind: str = Field(description="anomaly kind or degradation scenario name")
     duration: float = Field(default=1800, description="seconds for anomalies, hours for degradations")
     channel: Optional[str] = None
+    severity: str = Field(default="HIGH", description="LOW | MEDIUM | HIGH (anomalies only)")
 
 
 class SpeedRequest(BaseModel):

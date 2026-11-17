@@ -5,7 +5,7 @@ A software-only prototype that watches a simulated 5 km mining conveyor, flags a
 Everything here runs on a CPU with no hardware. Sensor data comes from a simulator I wrote. Images are **synthetic**, because I could not download a real conveyor-defect dataset in the build environment (details in [Vision](#vision-component)).
 
 > **Read this first: what is and isn't validated**
-> - Anomaly detection and failure prediction were trained and tested **on simulator data only**. The scores below say the code works and the simulator is learnable. They do not say anything about a real conveyor, and they do not reproduce the research paper's published results.
+> - Anomaly detection and failure prediction were trained and tested **on simulator data only**. The scores below measure this pipeline, not a real conveyor, and are **not comparable to the research paper's published numbers**. Several are near 1.0 because the simulator is easy; see the caveats next to each.
 > - The vision detector is a **hand-written OpenCV heuristic, not a trained or pretrained model**. It is a labelled stand-in, evaluated only on synthetic images that I also used to tune it.
 > - Belt-segment positions are **simulated metadata**, never read from an image.
 
@@ -38,9 +38,9 @@ Trained models are committed in `models/`. To retrain and regenerate the metrics
 ```bash
 cd backend
 python -m app.ml.anomaly_detection.train      # under a minute
-python -m app.ml.failure_prediction.train     # ~80 s
+python -m app.ml.failure_prediction.train     # ~3 min
 python -m app.vision.evaluate                 # synthetic-image demo evaluation
-python -m pytest tests -q                     # 55 tests
+python -m pytest tests -q                     # 56 tests
 ```
 
 ## The problem and my approach
@@ -61,6 +61,7 @@ I deliberately did **not** let one model decide station health. Anomalies (odd b
 
 - **Modular monolith, FastAPI + SQLite + React.** One process, no queue, no broker. The load is 5 readings/second. SQLAlchemy keeps PostgreSQL possible.
 - **Polling every 2.5 s, no WebSockets.** Simpler, and the dashboard keeps its last data if the API drops.
+- **Ingestion and inference are separate.** Ingestion only validates and stores. A background asyncio task (every 5 s, `INFERENCE_INTERVAL_S`) processes readings newer than each station's `last_processed_timestamp`, idempotently; no model runs in a request handler except the explicit `/api/vision/analyze` upload endpoint.
 - **Two separate ML models.** The paper detects abnormal duty cycles; it does not predict component failure. Mixing them would pass off one as the other.
 - **Ground truth lives outside the feature path.** The simulator returns labels in a separate table. Failure windows use only past data (tested).
 - **Sensor problems are not equipment problems.** Missing, stuck or spiking values are flagged at ingestion, blanked before ML sees them, and show up as grey stations rather than anomalies.
@@ -71,7 +72,7 @@ I deliberately did **not** let one model decide station health. Anomalies (odd b
 
 - **How values are produced:** each station has a schedule of operating modes (OFF → IDLE → OPERATIONAL → ACTIVE → OPERATIONAL → IDLE). Sensor values are a function of mode and time plus seeded noise, so sensors are correlated: more load means more current and hydraulic pressure and slightly lower speed; slippage makes belt speed diverge from motor speed; bearing wear raises vibration and temperature together.
 - **Paper sensors vs extensions:** motor speed, high/low hydraulic pressure (and their difference) are the paper's. Vibration, temperature, current, load and belt speed are my additions and are labelled as such in `/api/sensors`.
-- **Scenarios:** normal cycles; abnormal cycles (unexpected stop, abnormal start-up, intermittent operation); value anomalies (overload, hydraulic fluctuation, excessive vibration, belt slippage, over-temperature); six degradation scenarios plus hydraulic degradation; sensor faults (stuck, spike, dropout, disconnect). Random missing values are always on (0.2 % per channel).
+- **Scenarios:** normal cycles; abnormal cycles (unexpected stop, abnormal start-up, intermittent operation); value anomalies (overload, hydraulic fluctuation, excessive vibration, belt slippage, over-temperature); six degradation scenarios plus hydraulic degradation; sensor faults (stuck, spike, dropout, disconnect). Random missing values are always on (0.2 % per channel). Sensor noise is configurable per channel; benign oddities (slow start-up, load spike, short pause) are generated as *normal*; value and cycle anomalies have LOW/MEDIUM/HIGH severity. Ground truth records all of it separately.
 - **Assumption to flag:** the paper's sensors belong to one drive. I gave every station its own drive-like sensor set so the paper's method can run per station.
 - **Reproducible:** same seed and call give identical data (tested).
 
@@ -92,32 +93,69 @@ Reference: Martinez-Rau et al., *On-device Anomaly Detection in Conveyor Belt Op
 
 Extension (not in the paper): `signal_checks.py` raises value-level anomalies (overload, slippage, vibration, temperature, hydraulic fluctuation) with plain threshold rules, because Approach 2 only sees cycle *structure*. Thresholds are calibrated to the simulator.
 
-**Results** (trained on days 1–18, tested on the last 10 days of a 28-day chronological split: 1,051 cycles, 164 abnormal; four of the paper's classifiers, XGBoost and Naive Bayes not run; full output in `models/anomaly_detection/metrics.json`):
+### How the evaluation avoids grading the simulator on its own rules
 
-| State classifier | State macro-F1 | Abnormal precision | Recall | F1 | FPR | FNR |
-|---|---|---|---|---|---|---|
-| **ExtraTrees (shipped)** | 0.987 | 1.000 | 0.970 | 0.985 | 0.000 | 0.030 |
-| Random forest | 0.987 | 1.000 | 0.988 | 0.994 | 0.000 | 0.012 |
-| Decision tree | 0.987 | 1.000 | 0.994 | 0.997 | 0.000 | 0.006 |
-| MLP | 0.987 | 1.000 | 0.896 | 0.945 | 0.000 | 0.104 |
+Because I wrote both the simulator and the models, a model can score well just by relearning my generator. The protocol below is meant to make that harder (it cannot remove it):
 
-ExtraTrees was chosen before looking at results because it is the paper's microcontroller pick; the others did slightly better here. Confusion matrix for the shipped model: TP 159, FP 0, FN 5, TN 887 (the 5 misses are abnormal start-ups scored as normal). Inference: ~8.5 ms for a 6-hour window of one station. **Read these numbers sceptically:** my simulator's cycles are cleanly separated, so the task is easy. They show the pipeline works, nothing more.
+- **Noise and oddities.** Test data has 1.5× sensor noise (per-channel multipliers are configurable). 25 % of normal cycles carry a *benign oddity labelled normal*: slow start-up (8–14 min ramp), brief load spike (1–3 min, +30 % load), or a short mid-cycle pause (1.5–3 min).
+- **Subtle anomalies with severities.** Value anomalies (overload, hydraulic fluctuation, vibration, slippage, over-temperature) come in LOW / MEDIUM / HIGH; LOW is close to normal variation. Cycle anomalies scale with severity too (number and length of stop-go dips; length of the unexpected stop).
+- **Splits by seed, scenario and time, never by row.** Train = seed 42 first 14 days; validation = the following days of seed 42 (the only place a model is chosen); **test = two different seeds (2001, 2002)** with different station biases and noise. Training data never contains `INTERMITTENT_OPERATION` cycles or `SHORT_PAUSE` oddities (held out entirely). The deployed model is refit on train+validation only. Rule thresholds in `signal_checks.py` were set while looking at seed-42 normal ranges and not changed after seeing test results.
+- **Reported per scenario and per severity**, plus false-positive rate on each benign variant.
+
+> **All results below are on synthetic simulator data. They measure this pipeline only and are not comparable to the paper's published numbers** (different data, different task framing, different splits).
+
+**Approach 2 results (test seeds 2001+2002, 2,924 cycles, 422 abnormal; full file `models/anomaly_detection/metrics.json`).** Classifier chosen on validation: decision tree (abnormal-cycle F1 on validation: DT 0.965, ExtraTrees 0.960, RF 0.950, MLP 0.888).
+
+| | Value |
+|---|---|
+| Precision / recall / F1 (abnormal) | **0.662 / 0.967 / 0.786** |
+| False-positive rate / false-negative rate | **0.083** / 0.033 |
+| Confusion (TP / FP / FN / TN) | 408 / 208 / 14 / 2,294 |
+| State classifier macro-F1 (two seeds) | 0.984, 0.984 |
+| Inference | ~20 ms for a 6-hour window of one station (includes feature extraction) |
+
+| Recall by scenario | | Recall by severity | | FPR on normal cycles by variant | |
+|---|---|---|---|---|---|
+| Abnormal start-up | 0.925 | LOW | 0.922 | no oddity | 0.003 |
+| Intermittent operation (held out of training) | 0.986 | MEDIUM | 0.985 | slow start-up | 0.000 |
+| Unexpected stop | 0.992 | HIGH | 0.988 | load spike | 0.000 |
+| | | | | **short pause** | **0.967** |
+
+What this says: the paper's pattern-matching rule treats a healthy 2-minute pause in the middle of a cycle as an intermittent-operation anomaly (97 % of those were flagged), which is where nearly all false positives come from. That is a real limitation of the rule, and the test only shows it because I added benign pauses. Recall is high across severities because cycle anomalies change the state sequence in a very structured way.
+
+**Rule-based value checks (my extension) are weak under this protocol.** Mean recall by severity across the five anomaly kinds: LOW 0.04, MEDIUM 0.32, HIGH 0.51 (per kind and severity in the metrics file; e.g. motor overload is almost never caught), with a 6.4 % false-alarm rate on normal 30-minute windows. The thresholds were calibrated at noise ×1.0 and do not hold at ×1.5. I did not retune them on the test data. They should be treated as a placeholder, not a detector.
+
+**Why the high numbers need a caveat (logged in `IMPLEMENTATION_STATUS.md`).** State macro-F1 of 0.984 looks excellent, but a three-line speed-threshold rule already scores 0.955 on the same data, while a classifier trained on shuffled labels scores 0.199. So there is no leakage, but the state task is too easy: simulator modes differ strongly in speed. Cycle recall near 0.99 for the structured anomalies is for the same reason.
 
 ## Failure-risk prediction (my extension)
 
-`backend/app/ml/failure_prediction/`. Per station, every 30 minutes, features come from the previous 60 minutes (vibration stats and slope, temperature trend, current trend, pressure deviation, slip, load, running fraction) and previous 12 hours (drift), plus running hours and rule-flag counts over 24 h. Windows with under 15 running samples produce no prediction. Classes: normal plus seven degradation scenarios, mapped to six components. A separate gradient-boosting regressor estimates hours to failure, and the API only returns it when risk ≥ 0.5.
+`backend/app/ml/failure_prediction/`. Per station, at 15-minute window ends, features come from the previous 60 minutes (vibration stats and slope, temperature trend, current trend, pressure deviation, slip, load, running fraction) and previous 12 hours (drift), plus running hours and rule-flag counts over 24 h. Windows with under 15 running samples produce no prediction. Classes: normal plus seven degradation scenarios, mapped to six components. A separate gradient-boosting regressor estimates hours to failure and is only returned when risk ≥ 0.5.
 
-Temporal split (train until day 19.5, test after; 6,510 / 2,846 windows). Windows with degradation level 0 < L < 0.25 are excluded as "not yet detectable"; that threshold is my choice.
+Protocol as above: train seed 42 (episodes days 1–15, profiles linear/accelerating), validation = a second seed's later days (candidate chosen here: random forest, macro-F1 0.913 vs ExtraTrees 0.846 vs gradient boosting 0.751), test = seeds 2001/2002 with 1.5× noise, benign oddities, severity-graded anomalies and sensor faults as hard negatives, and a **held-out degradation profile** (`early_onset`) never seen in training. Windows with degradation level 0 < L < 0.25 are dropped (my choice of "not yet detectable"). Degradation severity buckets: LOW 0.25–0.5, MEDIUM 0.5–0.75, HIGH ≥ 0.75 of the way to failure.
 
-| Model | Accuracy | Macro-F1 | Fault recall @ risk 0.5 | False alarms on normal |
-|---|---|---|---|---|
-| **Random forest (shipped)** | 0.980 | 0.856 | 0.972 | 0.85 % |
-| Extra trees | 0.975 | 0.839 | 0.935 | 0.81 % |
-| Gradient boosting | 0.971 | 0.774 | 0.870 | 0.35 % |
+| Test (8,892 normal + 683 fault windows) | Value |
+|---|---|
+| Accuracy / macro-F1 | 0.970 / **0.769** |
+| Fault windows flagged at risk ≥ 0.5 | 0.990 |
+| False-alarm rate on normal windows (includes benign/hard negatives) | **0.027** |
+| Time-to-failure MAE vs predict-the-mean baseline | **4.52 h vs 4.77 h** |
 
-Per component (shipped model): hydraulic system F1 0.98, conveyor belt 0.92, drive motor 0.79, pulley 0.77, idler 0.74, bearing 0.71. Bearing, pulley and idler all raise vibration, so they get confused with each other (see the confusion matrix in `models/failure_prediction/metrics.json`), and in the live demo the predicted component for a wearing bearing can flip between bearing/idler/pulley before settling. Time-to-failure MAE is 1.8 h against 3.1 h for a predict-the-mean baseline.
+| Class recall by severity | | Class recall by scenario | | Per-component F1 | |
+|---|---|---|---|---|---|
+| LOW | 0.753 | belt tension | 1.00 | belt | 0.94 |
+| MEDIUM | 0.856 | hydraulic | 1.00 | bearing | 0.82 |
+| HIGH | 0.900 | belt abrasion | 0.94 | hydraulic | 0.79 |
+| | | motor overheating | 0.91 | drive motor | 0.72 |
+| | | bearing | 0.86 | pulley | 0.55 |
+| | | pulley | 0.67 | idler | **0.40** |
+| | | idler | **0.45** | | |
 
-Caveats: the shipped model was picked by macro-F1 **on the test split**, so its numbers are slightly optimistic. The test period contains only two episodes per scenario (16 windows for belt tension), so per-component scores are noisy. `risk_score` is `1 − P(normal)` from the classifier. It ranks, but it is not a calibrated probability, and the API/UI say so. A sustained injected vibration anomaly can look like idler wear (visible on ST-002 in the demo); I left it in because it is a real limitation.
+- **Detection is good, diagnosis is not.** Almost every fault window is flagged (0.99), but naming the component is much worse for bearing / pulley / idler, which all show up as extra vibration. Idler F1 is 0.40. The UI therefore shows the component as the model's best guess.
+- **The time-to-failure estimate is barely better than guessing the average** (4.52 h vs 4.77 h MAE on held-out seeds). Earlier numbers that looked much better (1.8 h vs 3.1 h) came from a protocol where train and test shared seed and noise; that was the circularity the update asked me to remove. Treat the ETA in the dashboard as indicative only.
+- **Held-out scenario:** a model trained without `belt_abrasion` flags 86 % of its windows as risky, but names them as pulley (86 of 101). It notices "something is wrong" without having seen the fault, which is the useful behaviour, and can't name it, as expected.
+- **Held-out profile:** `early_onset` windows score high (class recall 0.97) mostly because that profile reaches high degradation levels quickly, so the comparison by profile is confounded with severity. I would not read it as generalisation evidence.
+- `risk_score` is `1 − P(normal)` from the classifier. It ranks windows, it is not a calibrated probability, and the API/UI say so. The test period has only two episodes per scenario per seed, so per-scenario numbers are noisy. A sustained injected vibration anomaly can look like idler wear (visible on ST-002 in the demo); I left it in because it is a real limitation.
+
 
 ## Vision component
 
@@ -160,7 +198,7 @@ API (full list in [api-design](docs/api/api-design.md), interactive docs at `/do
 
 ## Testing
 
-`backend/tests`: 55 tests, all passing at the time of writing: simulator (positions, reproducibility, correlations, ground-truth separation, transitions), anomaly pipeline (features, gaps, pattern matching, unexpected-stop, incomplete cycles), failure model (no label leakage, past-only features, temporal split, shipped model sanity), vision (loading, CPU inference, tracker modulo logic, duplicate handling), and the API end to end with a real SQLite file (ingestion, persistence, pagination, scenario injection → anomaly → station status, quality handling). I also ran the full app and drove it through a browser. No test covers the frontend code itself.
+`backend/tests`: 56 tests, all passing at the time of writing: simulator (positions, reproducibility, correlations, ground-truth separation, transitions), anomaly pipeline (features, gaps, pattern matching, unexpected-stop, incomplete cycles), failure model (no label leakage, past-only features, temporal split, shipped model sanity), vision (loading, CPU inference, tracker modulo logic, duplicate handling), and the API end to end with a real SQLite file (ingestion, persistence, pagination, scenario injection → anomaly → station status, quality handling). I also ran the full app and drove it through a browser. No test covers the frontend code itself.
 
 ## Assumptions and limitations
 

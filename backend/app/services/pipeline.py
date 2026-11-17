@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import pandas as pd
-from sqlalchemy import delete, desc, select, update
+from sqlalchemy import delete, desc, func, select, update
 
 from app.core.config import DATA_DIR, MODELS_DIR, Settings
 from app.database.models import (Anomaly, BeltSegment, Conveyor, FailurePrediction, OperatingCycle, SensorReading,
@@ -43,12 +43,13 @@ class Pipeline:
         self.validator = QualityValidator()
         self.tracker = BeltTracker(settings.sim.length_m)
         self.detector = load_detector(settings.vision_weights)
-        self.anom_model = self._load(AnomalyDetector, MODELS_DIR / "anomaly_detection" / "state_classifier_xtree.joblib")
+        self.anom_model = self._load(AnomalyDetector, MODELS_DIR / "anomaly_detection" / "state_classifier.joblib")
         self.fail_model = self._load(FailureModel, MODELS_DIR / "failure_prediction" / "failure_model.joblib")
         self.damaged_map: dict[int, list[str]] = {}
         self.station_ids: dict[str, str] = {}      # ST-001 -> uuid
         self.last_inference_tick = -1
         self.vision_log: list[dict] = []
+        self.pending_captures: list[tuple] = []
 
     @staticmethod
     def _load(cls, path):
@@ -68,6 +69,7 @@ class Pipeline:
             self.sim.reset(start=end - timedelta(hours=warm))
             self.validator = QualityValidator()
             self.tracker = BeltTracker(self.s.sim.length_m)
+            self.pending_captures = []
             with session_scope(self.Session) as db:
                 for m in (VisionDetection, BeltSegment, FailurePrediction, Anomaly, OperatingCycle, SensorReading, SensorStation, Conveyor):
                     db.execute(delete(m))
@@ -88,23 +90,7 @@ class Pipeline:
                     self.damaged_map[int(k)] = d["files"]
             if warm > 0:
                 self._warm_start(warm, demo_scenarios)
-            with session_scope(self.Session) as db:
-                if warm > 6:
-                    self._backfill_predictions(db, hours=min(warm - 1, 10), step_min=60)
-                self._inference(db, force=True)
-                self._health(db)
-
-    def _backfill_predictions(self, db, hours: float, step_min: int):
-        """Run the failure model at past times (using only data up to each time) so risk trends exist from the start."""
-        end = from_epoch(self.sim.now)
-        t = end - timedelta(hours=hours)
-        while t < end:
-            for st in db.execute(select(SensorStation)).scalars():
-                raw = self.mask_bad(self._station_frame(db, st.id, FAIL_WINDOW_H, t))
-                if len(raw) >= 60:
-                    self._run_failure(db, st, raw, t)
-            t += timedelta(minutes=step_min)
-        db.flush()
+            # no inference here: the background processor picks the new readings up (watermark is NULL)
 
     def _warm_start(self, warm: float, demo: bool):
         t_end = self.sim.now + warm * 3600
@@ -132,8 +118,7 @@ class Pipeline:
             for ts, v in zip(b["timestamp"], b["belt_speed"]):
                 if v == v and v > 0:
                     crossed = self.tracker.advance(float(v) * 60.0)
-                    if crossed:
-                        self._vision_capture(db, crossed, ts.to_pydatetime())
+                    self.pending_captures += [(i, ts.to_pydatetime(), self.tracker.passes.get(i, 1)) for i in crossed]
         self.sim.now = t_end
         self.sim.tick = int(warm * 60)
 
@@ -157,19 +142,16 @@ class Pipeline:
                         belt.append(r["belt_speed"])
                 db.add_all(rows)
                 crossed = self.tracker.advance(float(np.mean(belt) if belt else 0.0) * self.sim.step_seconds)
-                self._vision_capture(db, crossed, now)
-                if (self.sim.tick - self.last_inference_tick) >= self.s.inference_every_n_ticks:
-                    self._inference(db)
-                self._health(db)
+                self.pending_captures += [(i, now, self.tracker.passes.get(i, 1)) for i in crossed]   # analysed by the background processor
             return {"tick": self.sim.tick, "simulated_time": now.isoformat(), "readings": len(readings), "segments_crossed": len(crossed)}
 
-    def _vision_capture(self, db, crossed: list[int], now):
-        for idx in crossed:
+    def _vision_capture(self, db, captures: list[tuple]):
+        for idx, now, pass_no in captures:
             seg = db.get(BeltSegment, BeltTracker.segment_id(idx))
             seg.pass_count += 1; seg.last_observed_at = now; seg.position_meters = self.tracker.position_of(idx)
             files = self.damaged_map.get(idx)
             if files:
-                stage = min((self.tracker.passes.get(idx, 1) - 1) // 2, 2)   # damage grows with successive passes (simulated wear)
+                stage = min((pass_no - 1) // 2, 2)   # damage grows with successive passes (simulated wear)
                 res = vision_service.analyze_and_store(db, self.detector, SAMPLES / files[stage], seg.id, seg.position_meters, now, "SIMULATED")
                 self.vision_log.append({"segment": seg.id, "image": files[stage], "n": len(res)})
 
@@ -198,21 +180,54 @@ class Pipeline:
                 df.at[i, ch] = np.nan
         return df
 
-    def _inference(self, db, force=False):
-        self.last_inference_tick = self.sim.tick
-        now = from_epoch(self.sim.now)
-        for st in db.execute(select(SensorStation)).scalars():
-            sid = st.station_name
-            raw = self.mask_bad(self._station_frame(db, st.id, FAIL_WINDOW_H, now))
-            if raw.empty or len(raw) < 30:
+    def process_pending(self) -> dict:
+        """Background processor (idempotent). For each station: take readings newer than the watermark, run anomaly detection
+        and failure prediction once enough window data exists, persist, then advance last_processed_timestamp.
+        Also analyses queued camera captures and refreshes station health. Never called from ingestion."""
+        with self.lock, session_scope(self.Session) as db:
+            if self.pending_captures:
+                caps, self.pending_captures = self.pending_captures, []
+                self._vision_capture(db, caps)
+            done, newest_all = 0, None
+            for st in db.execute(select(SensorStation)).scalars():
+                newest = db.execute(select(func.max(SensorReading.timestamp)).where(SensorReading.station_id == st.id)).scalar()
+                if newest is None:
+                    continue
+                newest = newest.replace(tzinfo=timezone.utc)
+                newest_all = newest if newest_all is None or newest > newest_all else newest_all
+                lp = st.last_processed_timestamp.replace(tzinfo=timezone.utc) if st.last_processed_timestamp else None
+                if lp is not None and newest <= lp:
+                    continue                                     # nothing new
+                if self._process_station(db, st, newest, lp):
+                    st.last_processed_timestamp = newest
+                    done += 1
+            if newest_all is not None:
+                for a in db.execute(select(Anomaly).where(Anomaly.status == "ACTIVE", Anomaly.source == "PAPER_APPROACH_2")).scalars():
+                    if newest_all - a.detected_at.replace(tzinfo=timezone.utc) > CYCLE_ANOMALY_TTL:
+                        a.status, a.resolved_at = "RESOLVED", newest_all
+                db.flush()
+                self._health(db, newest_all)
+            return {"stations_processed": done}
+
+    def _process_station(self, db, st, newest, lp) -> bool:
+        backfill = timedelta(hours=10)
+        start = lp if lp is not None else newest - backfill
+        raw = self.mask_bad(self._station_frame(db, st.id, FAIL_WINDOW_H + backfill.total_seconds() / 3600, newest))
+        if len(raw) < 30:
+            return False                                         # not enough window data yet: leave the watermark where it is
+        self._run_anomaly(db, st, raw[raw.timestamp >= newest - timedelta(hours=ANOMALY_WINDOW_H)], newest)
+        ends = pd.date_range(pd.Timestamp(start).ceil("15min"), pd.Timestamp(newest), freq="15min", tz="UTC")
+        have = {x.replace(tzinfo=timezone.utc) for x in db.execute(select(FailurePrediction.predicted_at).where(
+            FailurePrediction.station_id == st.id, FailurePrediction.predicted_at >= start)).scalars()}
+        for e in ends:
+            e = e.to_pydatetime()
+            if e in have:
                 continue
-            self._run_anomaly(db, st, raw[raw.timestamp >= now - timedelta(hours=ANOMALY_WINDOW_H)], now)
-            self._run_failure(db, st, raw, now)
-        # resolve stale cycle anomalies
-        for a in db.execute(select(Anomaly).where(Anomaly.status == "ACTIVE", Anomaly.source == "PAPER_APPROACH_2")).scalars():
-            if now - a.detected_at.replace(tzinfo=timezone.utc) > CYCLE_ANOMALY_TTL:
-                a.status, a.resolved_at = "RESOLVED", now
-        db.flush()   # autoflush is off: make new rows visible to the health engine in the same transaction
+            upto = raw[raw.timestamp <= e]
+            if len(upto) >= 60:
+                self._run_failure(db, st, upto, e)
+        db.flush()
+        return True
 
     def _run_anomaly(self, db, st, raw6h: pd.DataFrame, now):
         if self.anom_model is not None and len(raw6h) >= 30:
@@ -254,13 +269,8 @@ class Pipeline:
                                  severity=p["severity"], estimated_time_to_failure=p["estimated_time_to_failure_hours"],
                                  prediction_basis=p["prediction_basis"], class_scores=p["class_scores"], predicted_at=now))
 
-    def _health(self, db):
-        now = from_epoch(self.sim.now)
+    def _health(self, db, now=None):
+        now = now or from_epoch(self.sim.now)
         for st in db.execute(select(SensorStation)).scalars():
             health.evaluate_station(db, st, now, self.sim.step_seconds)
 
-    # -------------------------------------------------------------- controls
-    def run_inference_now(self):
-        with self.lock, session_scope(self.Session) as db:
-            self._inference(db, force=True)
-            self._health(db)

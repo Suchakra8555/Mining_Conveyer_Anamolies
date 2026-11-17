@@ -15,7 +15,7 @@ export default function Simulation() {
   const { data: sim } = useSim(); const { data: sc } = useScenarios(); const { data: st } = useStations();
   const qc = useQueryClient();
   const [type, setType] = useState("anomaly"); const [kind, setKind] = useState("MOTOR_OVERLOAD"); const [station, setStation] = useState("ST-003");
-  const [dur, setDur] = useState(3600); const [msg, setMsg] = useState("");
+  const [dur, setDur] = useState(3600); const [sev, setSev] = useState("HIGH"); const [msg, setMsg] = useState("");
   const refresh = () => qc.invalidateQueries();
   const act = async (fn: () => Promise<any>, ok: string) => { try { await fn(); setMsg(ok); } catch (e) { setMsg(String(e)); } refresh(); };
   const kinds = type === "anomaly" ? [...(sc?.anomalies.cycle_structure ?? []), ...(sc?.anomalies.value_level ?? []), ...(sc?.anomalies.sensor_faults ?? [])] : Object.keys(sc?.degradations ?? {});
@@ -42,7 +42,8 @@ export default function Simulation() {
           <label>Station<select className="ml-2 rounded border border-slate-600 bg-slate-800 px-2 py-1" value={station} onChange={e => setStation(e.target.value)}>{st?.map(s => <option key={s.id}>{s.station_name}</option>)}</select></label>
           <label>Kind<select className="ml-2 rounded border border-slate-600 bg-slate-800 px-2 py-1" value={kind} onChange={e => setKind(e.target.value)}>{kinds.map(k => <option key={k}>{k}</option>)}</select></label>
           <label>{type === "anomaly" ? "Duration (s)" : "Hours to failure"}<input type="number" min={1} className="ml-2 w-24 rounded border border-slate-600 bg-slate-800 px-2 py-1" value={dur} onChange={e => setDur(+e.target.value)} /></label>
-          <Button onClick={() => inject({ type, station_id: station, kind, duration: dur })}>Inject</Button>
+          {type === "anomaly" && <label>Severity<select className="ml-2 rounded border border-slate-600 bg-slate-800 px-2 py-1" value={sev} onChange={e => setSev(e.target.value)}><option>LOW</option><option>MEDIUM</option><option>HIGH</option></select></label>}
+          <Button onClick={() => inject({ type, station_id: station, kind, duration: dur, severity: sev })}>Inject</Button>
         </div>
       </Card>
       <Note>Sensor faults (SENSOR_*) test the data-quality path: the station turns grey (offline/unknown) rather than raising an equipment anomaly.</Note>

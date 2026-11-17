@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -40,6 +40,7 @@ class SensorStation(Base):
     status_evidence: Mapped[dict] = mapped_column(JSON, default=dict)         # why the health engine chose this status
     sensor_health: Mapped[str] = mapped_column(String(16), default="UNKNOWN")  # ONLINE/DEGRADED/OFFLINE/UNKNOWN
     status_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_processed_timestamp: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # inference watermark
     conveyor: Mapped[Conveyor] = relationship(back_populates="stations")
 
 
@@ -101,7 +102,8 @@ class FailurePrediction(Base):
     prediction_basis: Mapped[str] = mapped_column(String(32), default="SIMULATED_DEGRADATION")
     class_scores: Mapped[dict] = mapped_column(JSON, default=dict)
     predicted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    __table_args__ = (Index("ix_pred_station_at", "station_id", "predicted_at"),)
+    __table_args__ = (Index("ix_pred_station_at", "station_id", "predicted_at"),
+                      UniqueConstraint("station_id", "predicted_at", name="uq_pred_station_window"))   # idempotent re-runs
 
 
 class BeltSegment(Base):

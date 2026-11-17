@@ -24,5 +24,7 @@ def client(tmp_path_factory):
     os.environ["SIM_AUTOSTART"] = "false"
     from fastapi.testclient import TestClient
     from app.main import create_app
-    with TestClient(create_app()) as c:
+    app = create_app()
+    with TestClient(app) as c:
+        c.app.state.pipeline.process_pending()      # deterministic: don't wait for the background task
         yield c

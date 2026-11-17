@@ -57,6 +57,16 @@ CYCLE_ANOMALY_KINDS = ["UNEXPECTED_STOP", "ABNORMAL_STARTUP", "INTERMITTENT_OPER
 VALUE_ANOMALY_KINDS = ["MOTOR_OVERLOAD", "HYDRAULIC_FLUCTUATION", "EXCESSIVE_VIBRATION",
                        "BELT_SLIPPAGE", "EXCESSIVE_TEMPERATURE"]
 SENSOR_FAULT_KINDS = ["SENSOR_STUCK", "SENSOR_SPIKE", "SENSOR_DISCONNECT", "SENSOR_DROPOUT"]
+SEVERITIES = ["LOW", "MEDIUM", "HIGH"]
+BENIGN_VARIANTS = ["SLOW_STARTUP", "SHORT_PAUSE", "LOAD_SPIKE"]   # unusual but healthy behaviour, labelled NORMAL
+# magnitude of value anomalies by severity. LOW sits close to normal variation on purpose.
+SEV_MAG = {
+    "MOTOR_OVERLOAD": {"LOW": 0.10, "MEDIUM": 0.20, "HIGH": 0.35},          # extra load fraction
+    "HYDRAULIC_FLUCTUATION": {"LOW": 4.0, "MEDIUM": 8.0, "HIGH": 12.0},     # bar amplitude
+    "EXCESSIVE_VIBRATION": {"LOW": 0.8, "MEDIUM": 2.0, "HIGH": 4.0},        # mm/s added
+    "BELT_SLIPPAGE": {"LOW": 0.03, "MEDIUM": 0.08, "HIGH": 0.15},           # speed deficit fraction
+    "EXCESSIVE_TEMPERATURE": {"LOW": 5.0, "MEDIUM": 12.0, "HIGH": 25.0},    # degrees added
+}
 
 # scenario -> (component, failure_type)
 DEGRADATION = {
@@ -77,6 +87,8 @@ class Seg:
     mode: Mode
     cycle_id: Optional[str] = None
     kind: str = "NORMAL"  # NORMAL or one of CYCLE_ANOMALY_KINDS
+    severity: str = ""    # LOW/MEDIUM/HIGH for abnormal cycles (ground truth intensity)
+    variant: str = ""     # benign oddity name for NORMAL cycles: SLOW_STARTUP | SHORT_PAUSE
 
 
 @dataclass
@@ -86,6 +98,7 @@ class AnomalyWindow:
     t1: float
     channel: Optional[str] = None
     stuck_value: Optional[float] = None
+    severity: str = "MEDIUM"
 
 
 @dataclass
@@ -174,35 +187,50 @@ class ConveyorSimulator:
     def _rng_sched(self, st: Station) -> np.random.Generator:
         return np.random.default_rng([self.cfg.seed, 11, st.idx, st.cycle_counter, len(st.segs)])
 
-    def _add(self, st: Station, mode: Mode, dur_s: float, cycle_id=None, kind="NORMAL"):
+    def _add(self, st: Station, mode: Mode, dur_s: float, cycle_id=None, kind="NORMAL", severity="", variant=""):
         t0 = st.horizon if st.segs else self.t0 - 3600.0
-        st.segs.append(Seg(t0, t0 + dur_s, mode, cycle_id, kind))
+        st.segs.append(Seg(t0, t0 + dur_s, mode, cycle_id, kind, severity, variant))
 
     def _new_cycle_id(self, st: Station) -> str:
         st.cycle_counter += 1
         return f"{st.station_id}-C{st.cycle_counter:05d}"
 
-    def _build_cycle(self, st: Station, kind: str, r: np.random.Generator):
-        """Append a duty cycle (without leading idle gap). Normal = B C D C B pattern."""
+    def _build_cycle(self, st: Station, kind: str, r: np.random.Generator, severity: str = "MEDIUM", benign: str | None = None):
+        """Append a duty cycle (without leading idle gap). Normal = B C D C B pattern.
+        Abnormal intensity follows `severity`; NORMAL cycles may carry a benign oddity (still labelled NORMAL)."""
         cid = self._new_cycle_id(st)
         m = 60.0
+        sev = severity if kind != "NORMAL" else ""
+        var = benign or ""
+        add = lambda mode, dur: self._add(st, mode, dur, cid, kind, sev, var)
         ramp = lambda: r.uniform(3, 5) * m
         if kind == "NORMAL":
-            self._add(st, Mode.OPERATIONAL, ramp(), cid, kind)
-            self._add(st, Mode.ACTIVE, r.uniform(25, 100) * m, cid, kind)
-            self._add(st, Mode.OPERATIONAL, ramp(), cid, kind)
+            ramp_up = r.uniform(8, 14) * m if benign == "SLOW_STARTUP" else ramp()
+            add(Mode.OPERATIONAL, ramp_up)
+            if benign == "SHORT_PAUSE":
+                add(Mode.ACTIVE, r.uniform(15, 40) * m); add(Mode.OPERATIONAL, r.uniform(1.5, 3) * m)
+                add(Mode.ACTIVE, r.uniform(15, 40) * m)
+            else:
+                add(Mode.ACTIVE, r.uniform(25, 100) * m)
+            add(Mode.OPERATIONAL, ramp())
+            if benign == "LOAD_SPIKE":
+                act = [x for x in st.segs if x.cycle_id == cid and x.mode == Mode.ACTIVE][0]
+                t = act.t0 + r.uniform(0.3, 0.7) * (act.t1 - act.t0)
+                st.anomalies.append(AnomalyWindow("BENIGN_LOAD_SPIKE", t, t + r.uniform(1, 3) * m, severity="BENIGN"))
         elif kind == "UNEXPECTED_STOP":     # power lost while running; machine goes OFF (not idle)
-            self._add(st, Mode.OPERATIONAL, ramp(), cid, kind)
-            self._add(st, Mode.ACTIVE, r.uniform(10, 40) * m, cid, kind)
-            self._add(st, Mode.OFF, r.uniform(15, 30) * m, None, "NORMAL")
+            add(Mode.OPERATIONAL, ramp())
+            add(Mode.ACTIVE, r.uniform(10, 40) * m)
+            self._add(st, Mode.OFF, {"LOW": 3, "MEDIUM": 10, "HIGH": 25}[severity] * m + r.uniform(0, 3) * m, None, "NORMAL")
         elif kind == "ABNORMAL_STARTUP":    # jumps from idle straight to full operation
-            self._add(st, Mode.ACTIVE, r.uniform(20, 60) * m, cid, kind)
-            self._add(st, Mode.OPERATIONAL, ramp(), cid, kind)
-        elif kind == "INTERMITTENT_OPERATION":
-            self._add(st, Mode.OPERATIONAL, ramp(), cid, kind)
-            for _ in range(int(r.integers(2, 4))):
-                self._add(st, Mode.ACTIVE, r.uniform(5, 12) * m, cid, kind)
-                self._add(st, Mode.OPERATIONAL, ramp(), cid, kind)
+            add(Mode.ACTIVE, r.uniform(20, 60) * m)
+            add(Mode.OPERATIONAL, ramp())
+        elif kind == "INTERMITTENT_OPERATION":   # severity = number of extra stop-go dips (and their length)
+            n_dips = {"LOW": 1, "MEDIUM": 2, "HIGH": 3}[severity]
+            dip = {"LOW": (2, 3), "MEDIUM": (3, 5), "HIGH": (4, 7)}[severity]
+            add(Mode.OPERATIONAL, ramp())
+            for _ in range(n_dips + 1):
+                add(Mode.ACTIVE, r.uniform(5, 15) * m)
+                add(Mode.OPERATIONAL, r.uniform(*dip) * m)
         else:
             raise ValueError(kind)
         return cid
@@ -227,10 +255,15 @@ class ConveyorSimulator:
                     if last != Mode.IDLE:
                         self._add(st, Mode.IDLE, r.uniform(10, 20) * 60)
                     self._add(st, Mode.IDLE, r.uniform(10, 35) * 60)
-                    kind = "NORMAL"
+                    kind, sev, ben = "NORMAL", "MEDIUM", None
                     if r.random() < self.cfg.abnormal_cycle_prob:
-                        kind = CYCLE_ANOMALY_KINDS[int(r.integers(0, len(CYCLE_ANOMALY_KINDS)))]
-                    self._build_cycle(st, kind, r)
+                        ks = [k for k in CYCLE_ANOMALY_KINDS if k not in self.cfg.held_out_cycle_kinds]
+                        kind = ks[int(r.integers(0, len(ks)))]
+                        sev = SEVERITIES[int(r.integers(0, 3))]
+                    elif r.random() < self.cfg.benign_prob:
+                        bs = [b for b in BENIGN_VARIANTS if b not in self.cfg.held_out_benign]
+                        ben = bs[int(r.integers(0, len(bs)))]
+                    self._build_cycle(st, kind, r, sev, ben)
                     if st.segs[-1].mode != Mode.OFF:
                         self._add(st, Mode.IDLE, 12 * 60)
             else:
@@ -249,8 +282,11 @@ class ConveyorSimulator:
 
     # --------------------------------------------------------------- injection
     def inject_anomaly(self, station_id: str, kind: str, duration_s: float = 1800.0,
-                       channel: str | None = None, start: float | None = None) -> dict:
+                       channel: str | None = None, start: float | None = None, severity: str = "HIGH") -> dict:
         kind = kind.upper()
+        severity = severity.upper()
+        if severity not in SEVERITIES:
+            raise ValueError(f"severity must be one of {SEVERITIES}")
         st = self.get_station(station_id)
         t = self.now if start is None else start
         if kind in CYCLE_ANOMALY_KINDS:
@@ -262,8 +298,8 @@ class ConveyorSimulator:
                 cur.kind = kind                     # the cycle in progress becomes the abnormal one
                 for s in st.segs:
                     if s.cycle_id == cur.cycle_id:
-                        s.kind = kind
-                self._add(st, Mode.OFF, 20 * 60)
+                        s.kind, s.severity = kind, severity
+                self._add(st, Mode.OFF, {"LOW": 3, "MEDIUM": 10, "HIGH": 25}[severity] * 60)
             else:
                 # begin at the end of the current cycle / immediately if not running
                 if mode in (Mode.ACTIVE, Mode.OPERATIONAL):
@@ -277,12 +313,12 @@ class ConveyorSimulator:
                 elif st.segs[-1].mode != Mode.IDLE:
                     self._add(st, Mode.IDLE, 12 * 60)
                 self._add(st, Mode.IDLE, 12 * 60)
-                self._build_cycle(st, kind, self._rng_sched(st))
+                self._build_cycle(st, kind, self._rng_sched(st), severity)
                 if st.segs[-1].mode != Mode.OFF:
                     self._add(st, Mode.IDLE, 12 * 60)
             return {"station_id": station_id, "kind": kind, "start": from_epoch(t).isoformat()}
         if kind in VALUE_ANOMALY_KINDS or kind in SENSOR_FAULT_KINDS:
-            w = AnomalyWindow(kind, t, t + duration_s, channel)
+            w = AnomalyWindow(kind, t, t + duration_s, channel, severity=severity)
             if kind == "SENSOR_STUCK":
                 w.channel = channel or "vibration"
                 w.stuck_value = float(self._render(st, np.array([t]), clean=True)[w.channel][0])
@@ -369,6 +405,8 @@ class ConveyorSimulator:
         deg_name = np.array([""] * n, dtype=object)
         fail_t = np.full(n, np.nan)
         anom_kind = np.array([""] * n, dtype=object)
+        anom_sev = np.array([""] * n, dtype=object)
+        benign_arr = np.array([""] * n, dtype=object)
         sensor_kind = np.array([""] * n, dtype=object)
         sf = rpm / nom
         for ep in st.episodes:
@@ -400,19 +438,22 @@ class ConveyorSimulator:
             if not m.any():
                 continue
             k = w.kind
+            mag = SEV_MAG.get(k, {}).get(w.severity, 0.0)
             if k == "MOTOR_OVERLOAD":
-                load_extra += np.where(m, 0.35, 0.0); rpm_mult -= np.where(m, 0.08, 0.0)
-                temp_add += np.where(m, 10, 0.0); anom_kind = np.where(m, k, anom_kind)
+                load_extra += np.where(m, mag, 0.0); rpm_mult -= np.where(m, 0.08 * mag / 0.35, 0.0)
+                temp_add += np.where(m, 10 * mag / 0.35, 0.0); anom_kind = np.where(m, k, anom_kind); anom_sev = np.where(m, w.severity, anom_sev)
             elif k == "HYDRAULIC_FLUCTUATION":
-                hp_add += np.where(m, 12 * np.sin(2 * np.pi * times / 45.0), 0.0)
-                lp_add += np.where(m, 3 * np.sin(2 * np.pi * times / 31.0), 0.0)
-                hp_noise += np.where(m, 3.0, 0.0); anom_kind = np.where(m, k, anom_kind)
+                hp_add += np.where(m, mag * np.sin(2 * np.pi * times / 45.0), 0.0)
+                lp_add += np.where(m, mag / 4 * np.sin(2 * np.pi * times / 31.0), 0.0)
+                hp_noise += np.where(m, mag / 4, 0.0); anom_kind = np.where(m, k, anom_kind); anom_sev = np.where(m, w.severity, anom_sev)
             elif k == "EXCESSIVE_VIBRATION":
-                vib_add += np.where(m, 4.0 * np.clip(sf, 0.2, 1), 0.0); anom_kind = np.where(m, k, anom_kind)
+                vib_add += np.where(m, mag * np.clip(sf, 0.2, 1), 0.0); anom_kind = np.where(m, k, anom_kind); anom_sev = np.where(m, w.severity, anom_sev)
             elif k == "BELT_SLIPPAGE":
-                slip += np.where(m, 0.15, 0.0); anom_kind = np.where(m, k, anom_kind)
+                slip += np.where(m, mag, 0.0); anom_kind = np.where(m, k, anom_kind); anom_sev = np.where(m, w.severity, anom_sev)
             elif k == "EXCESSIVE_TEMPERATURE":
-                temp_add += np.where(m, 25, 0.0); anom_kind = np.where(m, k, anom_kind)
+                temp_add += np.where(m, mag, 0.0); anom_kind = np.where(m, k, anom_kind); anom_sev = np.where(m, w.severity, anom_sev)
+            elif k == "BENIGN_LOAD_SPIKE":
+                load_extra += np.where(m, 0.3, 0.0); benign_arr = np.where(m, "LOAD_SPIKE", benign_arr)
             else:
                 sensor_kind = np.where(m, k, sensor_kind)
 
@@ -421,20 +462,21 @@ class ConveyorSimulator:
         sf = rpm / nom
         r = rng if rng is not None else np.random.default_rng([cfg.seed, 3, st.idx, int(times[0])])
         ns = 0.0 if clean else cfg.noise_scale
-        g = lambda s: r.normal(0, s * ns, n)
+        cn = cfg.channel_noise
+        g = lambda s, ch=None: r.normal(0, s * ns * cn.get(ch, 1.0), n)
         b = st.bias
         out = {}
-        out["motor_rpm"] = np.clip((rpm + g(0.25) * (powered > 0.5)) * (1 + b["motor_rpm"]), 0, None)
+        out["motor_rpm"] = np.clip((rpm + g(0.25, "motor_rpm") * (powered > 0.5)) * (1 + b["motor_rpm"]), 0, None)
         out["hydraulic_high_pressure"] = np.clip(
-            (powered * (30 + 55 * sf + 18 * lf) + hp_add + g(0.8) + r.normal(0, 1, n) * hp_noise * ns * powered)
+            (powered * (30 + 55 * sf + 18 * lf) + hp_add + g(0.8, "hydraulic_high_pressure") + r.normal(0, 1, n) * hp_noise * ns * powered)
             * (1 + b["hydraulic_high_pressure"]), 0, None)
         out["hydraulic_low_pressure"] = np.clip(
-            (powered * (9 + 5 * sf) + lp_add * powered + g(0.25)) * (1 + b["hydraulic_low_pressure"]), 0, None)
-        out["vibration"] = np.clip(0.1 + powered * (0.5 + 1.4 * sf) + 0.3 * lf + vib_add + g(0.08), 0, None)
-        out["temperature"] = self._amb(times) + 1.5 * powered + thermal + temp_add + b["temperature"] + g(0.3)
-        out["motor_current"] = np.clip(powered * (6 + 25 * sf + 95 * lf * sf) * cur_mult + g(1.0) * powered, 0, None)
-        out["material_load"] = np.clip(lf * 1000.0 + g(10.0) * (lf > 0.01), 0, None)
-        out["belt_speed"] = np.clip(rpm * (cfg.nominal_belt_speed_ms / nom) * (1 - slip) + g(0.02) * (rpm > 1), 0, None)
+            (powered * (9 + 5 * sf) + lp_add * powered + g(0.25, "hydraulic_low_pressure")) * (1 + b["hydraulic_low_pressure"]), 0, None)
+        out["vibration"] = np.clip(0.1 + powered * (0.5 + 1.4 * sf) + 0.3 * lf + vib_add + g(0.08, "vibration"), 0, None)
+        out["temperature"] = self._amb(times) + 1.5 * powered + thermal + temp_add + b["temperature"] + g(0.3, "temperature")
+        out["motor_current"] = np.clip(powered * (6 + 25 * sf + 95 * lf * sf) * cur_mult + g(1.0, "motor_current") * powered, 0, None)
+        out["material_load"] = np.clip(lf * 1000.0 + g(10.0, "material_load") * (lf > 0.01), 0, None)
+        out["belt_speed"] = np.clip(rpm * (cfg.nominal_belt_speed_ms / nom) * (1 - slip) + g(0.02, "belt_speed") * (rpm > 1), 0, None)
 
         if not clean:
             for w in st.anomalies:
@@ -460,10 +502,13 @@ class ConveyorSimulator:
             return out
         seg_kind = np.array([s.kind for s in st.segs], dtype=object)[idx]
         seg_cid = np.array([s.cycle_id or "" for s in st.segs], dtype=object)[idx]
+        seg_sev = np.array([s.severity for s in st.segs], dtype=object)[idx]
+        seg_var = np.array([s.variant for s in st.segs], dtype=object)[idx]
         truth = {
             "mode": cur, "state_letter": np.array([MODE_LETTER[Mode(int(m))] for m in cur], dtype=object),
             "cycle_id": seg_cid, "cycle_kind": seg_kind,
-            "anomaly_kind": anom_kind, "sensor_fault": sensor_kind,
+            "anomaly_kind": anom_kind, "anomaly_severity": anom_sev, "sensor_fault": sensor_kind,
+            "cycle_severity": seg_sev, "benign": np.where(benign_arr != "", benign_arr, seg_var),
             "degradation": deg_name, "degradation_level": deg_level,
             "failure_epoch": fail_t,
         }
@@ -528,7 +573,7 @@ class ConveyorSimulator:
         for p in degradation_plan or []:
             self.inject_degradation(p["station_id"], p["scenario"], p["duration_h"], start=p["start"], shape=p.get("shape", 1.5))
         for p in anomaly_plan or []:
-            self.inject_anomaly(p["station_id"], p["kind"], p.get("duration_s", 1800), p.get("channel"), start=p["start"])
+            self.inject_anomaly(p["station_id"], p["kind"], p.get("duration_s", 1800), p.get("channel"), start=p["start"], severity=p.get("severity", "HIGH"))
         feats, truths = [], []
         for st in self.stations:
             if stations and st.station_id not in stations:
@@ -551,10 +596,10 @@ class ConveyorSimulator:
             for s in st.segs:
                 if s.cycle_id:
                     d = by.setdefault(s.cycle_id, {"station_id": st.station_id, "cycle_id": s.cycle_id,
-                                                    "start": s.t0, "end": s.t1, "kind": s.kind})
+                                                    "start": s.t0, "end": s.t1, "kind": s.kind, "severity": s.severity, "variant": s.variant})
                     d["start"] = min(d["start"], s.t0); d["end"] = max(d["end"], s.t1)
                     if s.kind != "NORMAL":
-                        d["kind"] = s.kind
+                        d["kind"], d["severity"] = s.kind, s.severity
             rows += list(by.values())
         df = pd.DataFrame(rows)
         if df.empty:

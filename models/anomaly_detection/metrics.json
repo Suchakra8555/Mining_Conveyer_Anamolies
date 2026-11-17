@@ -1,332 +1,323 @@
 {
-  "split": "2025-01-19 00:00:00+00:00",
-  "train_rows": 259200,
-  "classifiers": {
+  "protocol": "Train + evaluate Approach 2 with an anti-circularity protocol. Run:  python -m app.ml.anomaly_detection.train\n\nProtocol\n  * TRAIN  seed 42, days 1-14   (noise x1.0, held-out: INTERMITTENT_OPERATION cycles and SHORT_PAUSE oddities never appear)\n  * VAL    seed 42, days 15-21  (chronological continuation; the ONLY place model choice is made)\n  * TEST   seeds 2001, 2002 x 14 days, noise x1.5, 25 % of normal cycles carry a benign oddity, all scenario variants present\n  * the deployed model is refit on TRAIN+VAL only; TEST data is never used for fitting, selection or threshold changes\n",
+  "note": "All results are on SYNTHETIC simulator data. They measure this pipeline only and are NOT comparable to the paper's published numbers.",
+  "validation": {
     "xtree": {
-      "state_macro_f1": 0.987,
-      "state_confusion_matrix": {
-        "labels": [
-          "A",
-          "B",
-          "C",
-          "D"
-        ],
-        "matrix": [
-          [
-            37884,
-            39,
-            0,
-            0
-          ],
-          [
-            76,
-            37168,
-            307,
-            0
-          ],
-          [
-            0,
-            33,
-            8344,
-            33
-          ],
-          [
-            0,
-            1,
-            343,
-            59772
-          ]
-        ]
-      },
-      "cycle_level": {
-        "n_gt_cycles": 1051,
-        "n_gt_abnormal": 164,
-        "precision": 1.0,
-        "recall": 0.9695,
-        "f1": 0.9845,
-        "false_positive_rate": 0.0,
-        "false_negative_rate": 0.0305,
-        "confusion_matrix_abnormal_vs_normal": {
-          "tp": 159,
-          "fp": 0,
-          "fn": 5,
-          "tn": 887
-        },
-        "indeterminate_data_gap": 0,
-        "missed_cycles": 0,
-        "category_confusion": {
-          "ABNORMAL_STARTUP": {
-            "ABNORMAL_STARTUP": 45,
-            "INTERMITTENT_OPERATION": 0,
-            "NORMAL": 0,
-            "UNEXPECTED_STOP": 0
-          },
-          "INTERMITTENT_OPERATION": {
-            "ABNORMAL_STARTUP": 0,
-            "INTERMITTENT_OPERATION": 62,
-            "NORMAL": 0,
-            "UNEXPECTED_STOP": 0
-          },
-          "NONE": {
-            "ABNORMAL_STARTUP": 5,
-            "INTERMITTENT_OPERATION": 0,
-            "NORMAL": 887,
-            "UNEXPECTED_STOP": 0
-          },
-          "UNEXPECTED_STOP": {
-            "ABNORMAL_STARTUP": 0,
-            "INTERMITTENT_OPERATION": 0,
-            "NORMAL": 0,
-            "UNEXPECTED_STOP": 52
-          }
-        }
-      },
-      "inference_ms_per_station_10days": 29.6
+      "state_macro_f1": 0.9879,
+      "abnormal_f1": 0.96,
+      "recall": 0.9231,
+      "fpr": 0.0
     },
     "rf": {
-      "state_macro_f1": 0.9871,
-      "state_confusion_matrix": {
-        "labels": [
-          "A",
-          "B",
-          "C",
-          "D"
-        ],
-        "matrix": [
-          [
-            37879,
-            44,
-            0,
-            0
-          ],
-          [
-            68,
-            37164,
-            319,
-            0
-          ],
-          [
-            0,
-            23,
-            8371,
-            16
-          ],
-          [
-            0,
-            1,
-            359,
-            59756
-          ]
-        ]
-      },
-      "cycle_level": {
-        "n_gt_cycles": 1051,
-        "n_gt_abnormal": 164,
-        "precision": 1.0,
-        "recall": 0.9878,
-        "f1": 0.9939,
-        "false_positive_rate": 0.0,
-        "false_negative_rate": 0.0122,
-        "confusion_matrix_abnormal_vs_normal": {
-          "tp": 162,
-          "fp": 0,
-          "fn": 2,
-          "tn": 887
-        },
-        "indeterminate_data_gap": 0,
-        "missed_cycles": 0,
-        "category_confusion": {
-          "ABNORMAL_STARTUP": {
-            "ABNORMAL_STARTUP": 48,
-            "INTERMITTENT_OPERATION": 0,
-            "NORMAL": 0,
-            "UNEXPECTED_STOP": 0
-          },
-          "INTERMITTENT_OPERATION": {
-            "ABNORMAL_STARTUP": 0,
-            "INTERMITTENT_OPERATION": 62,
-            "NORMAL": 0,
-            "UNEXPECTED_STOP": 0
-          },
-          "NONE": {
-            "ABNORMAL_STARTUP": 2,
-            "INTERMITTENT_OPERATION": 0,
-            "NORMAL": 887,
-            "UNEXPECTED_STOP": 0
-          },
-          "UNEXPECTED_STOP": {
-            "ABNORMAL_STARTUP": 0,
-            "INTERMITTENT_OPERATION": 0,
-            "NORMAL": 0,
-            "UNEXPECTED_STOP": 52
-          }
-        }
-      },
-      "inference_ms_per_station_10days": 31.4
+      "state_macro_f1": 0.9878,
+      "abnormal_f1": 0.9495,
+      "recall": 0.9038,
+      "fpr": 0.0
     },
     "dt": {
-      "state_macro_f1": 0.9865,
-      "state_confusion_matrix": {
-        "labels": [
-          "A",
-          "B",
-          "C",
-          "D"
-        ],
-        "matrix": [
-          [
-            37891,
-            31,
-            0,
-            1
-          ],
-          [
-            87,
-            37131,
-            333,
-            0
-          ],
-          [
-            0,
-            26,
-            8366,
-            18
-          ],
-          [
-            0,
-            0,
-            372,
-            59744
-          ]
-        ]
-      },
-      "cycle_level": {
-        "n_gt_cycles": 1051,
-        "n_gt_abnormal": 164,
-        "precision": 1.0,
-        "recall": 0.9939,
-        "f1": 0.9969,
-        "false_positive_rate": 0.0,
-        "false_negative_rate": 0.0061,
-        "confusion_matrix_abnormal_vs_normal": {
-          "tp": 163,
-          "fp": 0,
-          "fn": 1,
-          "tn": 887
-        },
-        "indeterminate_data_gap": 0,
-        "missed_cycles": 0,
-        "category_confusion": {
-          "ABNORMAL_STARTUP": {
-            "ABNORMAL_STARTUP": 49,
-            "INTERMITTENT_OPERATION": 0,
-            "NORMAL": 0,
-            "UNEXPECTED_STOP": 0
-          },
-          "INTERMITTENT_OPERATION": {
-            "ABNORMAL_STARTUP": 0,
-            "INTERMITTENT_OPERATION": 62,
-            "NORMAL": 0,
-            "UNEXPECTED_STOP": 0
-          },
-          "NONE": {
-            "ABNORMAL_STARTUP": 1,
-            "INTERMITTENT_OPERATION": 0,
-            "NORMAL": 887,
-            "UNEXPECTED_STOP": 0
-          },
-          "UNEXPECTED_STOP": {
-            "ABNORMAL_STARTUP": 0,
-            "INTERMITTENT_OPERATION": 0,
-            "NORMAL": 0,
-            "UNEXPECTED_STOP": 52
-          }
-        }
-      },
-      "inference_ms_per_station_10days": 21.8
+      "state_macro_f1": 0.9876,
+      "abnormal_f1": 0.9652,
+      "recall": 0.9327,
+      "fpr": 0.0
     },
     "mlp": {
-      "state_macro_f1": 0.9865,
-      "state_confusion_matrix": {
-        "labels": [
-          "A",
-          "B",
-          "C",
-          "D"
-        ],
-        "matrix": [
-          [
-            37850,
-            72,
-            0,
-            1
-          ],
-          [
-            56,
-            37355,
-            140,
-            0
-          ],
-          [
-            0,
-            184,
-            8036,
-            190
-          ],
-          [
-            0,
-            1,
-            208,
-            59907
-          ]
-        ]
-      },
-      "cycle_level": {
-        "n_gt_cycles": 1051,
-        "n_gt_abnormal": 164,
-        "precision": 1.0,
-        "recall": 0.8963,
-        "f1": 0.9453,
-        "false_positive_rate": 0.0,
-        "false_negative_rate": 0.1037,
-        "confusion_matrix_abnormal_vs_normal": {
-          "tp": 147,
-          "fp": 0,
-          "fn": 17,
-          "tn": 887
-        },
-        "indeterminate_data_gap": 0,
-        "missed_cycles": 0,
-        "category_confusion": {
-          "ABNORMAL_STARTUP": {
-            "ABNORMAL_STARTUP": 33,
-            "INTERMITTENT_OPERATION": 0,
-            "NORMAL": 0,
-            "UNEXPECTED_STOP": 0
-          },
-          "INTERMITTENT_OPERATION": {
-            "ABNORMAL_STARTUP": 0,
-            "INTERMITTENT_OPERATION": 62,
-            "NORMAL": 0,
-            "UNEXPECTED_STOP": 0
-          },
-          "NONE": {
-            "ABNORMAL_STARTUP": 17,
-            "INTERMITTENT_OPERATION": 0,
-            "NORMAL": 887,
-            "UNEXPECTED_STOP": 0
-          },
-          "UNEXPECTED_STOP": {
-            "ABNORMAL_STARTUP": 0,
-            "INTERMITTENT_OPERATION": 0,
-            "NORMAL": 0,
-            "UNEXPECTED_STOP": 52
-          }
-        }
-      },
-      "inference_ms_per_station_10days": 34.4
+      "state_macro_f1": 0.9866,
+      "abnormal_f1": 0.8877,
+      "recall": 0.7981,
+      "fpr": 0.0
     }
   },
-  "note": "Synthetic simulator data; chronological split (first 18 days train, last 10 days test). These numbers do NOT reproduce the paper's published results.",
-  "live_window_latency_ms_6h_window": 8.52
+  "test": {
+    "seeds": [
+      2001,
+      2002
+    ],
+    "noise_scale": 1.5,
+    "benign_prob": 0.25,
+    "deployed_classifier": "dt",
+    "state_macro_f1": [
+      0.9843,
+      0.9841
+    ],
+    "state_confusion_matrix_seed2001": {
+      "labels": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "matrix": [
+        [
+          51571,
+          55,
+          0,
+          0
+        ],
+        [
+          169,
+          52114,
+          594,
+          1
+        ],
+        [
+          0,
+          56,
+          12819,
+          75
+        ],
+        [
+          2,
+          0,
+          575,
+          83569
+        ]
+      ]
+    },
+    "cycle_level": {
+      "precision": 0.6623,
+      "recall": 0.9668,
+      "f1": 0.7861,
+      "false_positive_rate": 0.0831,
+      "false_negative_rate": 0.0332,
+      "confusion": {
+        "tp": 408,
+        "fp": 208,
+        "fn": 14,
+        "tn": 2294
+      },
+      "n_cycles": 2924,
+      "n_abnormal": 422,
+      "recall_by_scenario": {
+        "ABNORMAL_STARTUP": [
+          0.925,
+          147
+        ],
+        "INTERMITTENT_OPERATION": [
+          0.986,
+          145
+        ],
+        "UNEXPECTED_STOP": [
+          0.992,
+          130
+        ]
+      },
+      "recall_by_severity": {
+        "LOW": [
+          0.922,
+          129
+        ],
+        "MEDIUM": [
+          0.985,
+          132
+        ],
+        "HIGH": [
+          0.988,
+          161
+        ]
+      },
+      "recall_by_scenario_and_severity": {
+        "ABNORMAL_STARTUP/LOW": [
+          0.865,
+          52
+        ],
+        "ABNORMAL_STARTUP/MEDIUM": [
+          0.955,
+          44
+        ],
+        "ABNORMAL_STARTUP/HIGH": [
+          0.961,
+          51
+        ],
+        "INTERMITTENT_OPERATION/LOW": [
+          0.943,
+          35
+        ],
+        "INTERMITTENT_OPERATION/MEDIUM": [
+          1.0,
+          45
+        ],
+        "INTERMITTENT_OPERATION/HIGH": [
+          1.0,
+          65
+        ],
+        "UNEXPECTED_STOP/LOW": [
+          0.976,
+          42
+        ],
+        "UNEXPECTED_STOP/MEDIUM": [
+          1.0,
+          43
+        ],
+        "UNEXPECTED_STOP/HIGH": [
+          1.0,
+          45
+        ]
+      },
+      "false_positive_rate_by_benign_variant": {
+        "-": [
+          0.003,
+          1863
+        ],
+        "SLOW_STARTUP": [
+          0.0,
+          218
+        ],
+        "SHORT_PAUSE": [
+          0.967,
+          210
+        ],
+        "LOAD_SPIKE": [
+          0.0,
+          211
+        ]
+      },
+      "indeterminate_data_gap": 0,
+      "missed_cycles": 0
+    },
+    "value_rule_checks_per_seed": [
+      {
+        "recall_by_kind_and_severity": {
+          "BELT_SLIPPAGE/HIGH": [
+            0.9,
+            10
+          ],
+          "BELT_SLIPPAGE/LOW": [
+            0.0,
+            10
+          ],
+          "BELT_SLIPPAGE/MEDIUM": [
+            0.2,
+            10
+          ],
+          "EXCESSIVE_TEMPERATURE/HIGH": [
+            0.5,
+            10
+          ],
+          "EXCESSIVE_TEMPERATURE/LOW": [
+            0.0,
+            10
+          ],
+          "EXCESSIVE_TEMPERATURE/MEDIUM": [
+            0.0,
+            10
+          ],
+          "EXCESSIVE_VIBRATION/HIGH": [
+            0.4,
+            10
+          ],
+          "EXCESSIVE_VIBRATION/LOW": [
+            0.0,
+            10
+          ],
+          "EXCESSIVE_VIBRATION/MEDIUM": [
+            0.5,
+            10
+          ],
+          "HYDRAULIC_FLUCTUATION/HIGH": [
+            0.125,
+            8
+          ],
+          "HYDRAULIC_FLUCTUATION/LOW": [
+            0.0,
+            10
+          ],
+          "HYDRAULIC_FLUCTUATION/MEDIUM": [
+            0.4,
+            10
+          ],
+          "MOTOR_OVERLOAD/HIGH": [
+            0.0,
+            10
+          ],
+          "MOTOR_OVERLOAD/LOW": [
+            0.0,
+            10
+          ],
+          "MOTOR_OVERLOAD/MEDIUM": [
+            0.1,
+            10
+          ]
+        },
+        "false_alarm_rate_on_normal_windows": [
+          0.0639,
+          6493
+        ]
+      },
+      {
+        "recall_by_kind_and_severity": {
+          "BELT_SLIPPAGE/HIGH": [
+            0.9,
+            10
+          ],
+          "BELT_SLIPPAGE/LOW": [
+            0.0,
+            10
+          ],
+          "BELT_SLIPPAGE/MEDIUM": [
+            0.5,
+            10
+          ],
+          "EXCESSIVE_TEMPERATURE/HIGH": [
+            0.9,
+            10
+          ],
+          "EXCESSIVE_TEMPERATURE/LOW": [
+            0.0,
+            10
+          ],
+          "EXCESSIVE_TEMPERATURE/MEDIUM": [
+            0.0,
+            10
+          ],
+          "EXCESSIVE_VIBRATION/HIGH": [
+            0.5,
+            10
+          ],
+          "EXCESSIVE_VIBRATION/LOW": [
+            0.0,
+            10
+          ],
+          "EXCESSIVE_VIBRATION/MEDIUM": [
+            0.7,
+            10
+          ],
+          "HYDRAULIC_FLUCTUATION/HIGH": [
+            0.8,
+            10
+          ],
+          "HYDRAULIC_FLUCTUATION/LOW": [
+            0.4,
+            10
+          ],
+          "HYDRAULIC_FLUCTUATION/MEDIUM": [
+            0.8,
+            10
+          ],
+          "MOTOR_OVERLOAD/HIGH": [
+            0.0,
+            10
+          ],
+          "MOTOR_OVERLOAD/LOW": [
+            0.0,
+            10
+          ],
+          "MOTOR_OVERLOAD/MEDIUM": [
+            0.0,
+            10
+          ]
+        },
+        "false_alarm_rate_on_normal_windows": [
+          0.0626,
+          6490
+        ]
+      }
+    ]
+  },
+  "selected_on_validation": "dt",
+  "diagnostics": {
+    "shuffled_label_state_macro_f1": 0.199,
+    "trivial_speed_threshold_state_macro_f1": 0.955,
+    "feature_columns_contain_truth": false
+  },
+  "inference_ms_per_6h_window": 20.19
 }

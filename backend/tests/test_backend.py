@@ -65,6 +65,7 @@ def test_scenario_injection_validation_and_effect(client):
     ok = client.post("/api/simulation/scenarios", json={"type": "anomaly", "station_id": "ST-005", "kind": "BELT_SLIPPAGE", "duration": 7200})
     assert ok.status_code == 200
     client.post("/api/simulation/step?n=40")
+    client.app.state.pipeline.process_pending()
     types = [a["anomaly_type"] for a in client.get("/api/anomalies?station=ST-005&status=ACTIVE").json()["items"]]
     assert "BELT_SLIPPAGE" in types
     assert client.get("/api/stations/ST-005/health").json()["status"] in ("ABNORMAL", "PREDICTED_FAILURE")
@@ -121,7 +122,30 @@ def test_quality_validator_distinguishes_sensor_faults():
 def test_missing_sensor_data_is_not_reported_as_equipment_failure(client):
     client.post("/api/simulation/scenarios", json={"type": "anomaly", "station_id": "ST-009", "kind": "SENSOR_DISCONNECT", "duration": 7200})
     client.post("/api/simulation/step?n=30")
+    client.app.state.pipeline.process_pending()
     h = client.get("/api/stations/ST-009/health").json()
     assert h["status"] == "OFFLINE" and h["sensor_health"] == "OFFLINE"
     assert not [a for a in h["active_anomalies"] if a["type"] not in ("SENSOR_DISCONNECT",)] or True
     assert all(a["source"] != "DATA_QUALITY" for a in client.get("/api/anomalies?station=ST-009").json()["items"])
+
+
+def test_ingestion_does_not_run_inference_and_processor_is_idempotent(client):
+    from sqlalchemy import func, select
+    from app.database.models import Anomaly, FailurePrediction, SensorStation
+    p = client.app.state.pipeline
+    p.process_pending()
+    def counts():
+        with p.Session() as db:
+            return (db.execute(select(func.count()).select_from(Anomaly)).scalar(), db.execute(select(func.count()).select_from(FailurePrediction)).scalar())
+    before_wm = {}
+    with p.Session() as db:
+        before_wm = {s.station_name: s.last_processed_timestamp for s in db.execute(select(SensorStation)).scalars()}
+    c0 = counts()
+    client.post("/api/simulation/step?n=2")               # ingestion only
+    assert counts() == c0, "step (ingestion) must not run ML inference"
+    p.process_pending(); c1 = counts()
+    p.process_pending(); p.process_pending()
+    assert counts() == c1, "re-running the processor on the same data must not create duplicates"
+    with p.Session() as db:
+        after = {s.station_name: s.last_processed_timestamp for s in db.execute(select(SensorStation)).scalars()}
+    assert all(after[k] >= before_wm[k] for k in after if before_wm[k]) and any(after[k] > before_wm[k] for k in after if before_wm[k])

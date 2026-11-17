@@ -46,7 +46,7 @@ def speed(body: SpeedRequest, p=Depends(get_pipeline)):
 
 @router.post("/step")
 def step(n: int = 1, p=Depends(get_pipeline)):
-    """Advance the simulation manually (used by tests/demos)."""
+    """Advance the simulation manually: ingestion only (validate + store). Inference runs in the background task."""
     if not 1 <= n <= 500:
         raise HTTPException(422, "n must be 1..500")
     r = None
@@ -66,7 +66,7 @@ def inject(body: ScenarioRequest, p=Depends(get_pipeline)):
     with p.lock:
         try:
             if body.type == "anomaly":
-                res = p.sim.inject_anomaly(body.station_id, body.kind, duration_s=body.duration, channel=body.channel)
+                res = p.sim.inject_anomaly(body.station_id, body.kind, duration_s=body.duration, channel=body.channel, severity=body.severity)
             elif body.type == "degradation":
                 res = p.sim.inject_degradation(body.station_id, body.kind, duration_h=body.duration)
             else:

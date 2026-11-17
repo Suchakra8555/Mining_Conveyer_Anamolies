@@ -26,6 +26,16 @@ async def _loop(p: Pipeline):
         await asyncio.sleep(p.sim.cfg.interval_s)
 
 
+async def _inference_loop(p: Pipeline, every_s: float):
+    """Background inference task: independent of ingestion; idempotent via per-station watermarks."""
+    while True:
+        try:
+            await asyncio.to_thread(p.process_pending)
+        except Exception:
+            log.exception("inference run failed")
+        await asyncio.sleep(every_s)
+
+
 def create_app(settings: Settings | None = None, warm_start: bool = True) -> FastAPI:
     settings = settings or get_settings()
 
@@ -37,10 +47,11 @@ def create_app(settings: Settings | None = None, warm_start: bool = True) -> Fas
             await asyncio.to_thread(p.setup)
         if settings.autostart:
             p.sim.start_simulation()
-        task = asyncio.create_task(_loop(p))
+        tasks = [asyncio.create_task(_loop(p)), asyncio.create_task(_inference_loop(p, settings.inference_interval_s))]
         log.info("conveyor monitoring ready (vision detector: %s)", p.detector.kind)
         yield
-        task.cancel()
+        for t in tasks:
+            t.cancel()
 
     app = FastAPI(title="Mining Conveyor Monitoring API", version="1.0", lifespan=lifespan,
                   description="Simulated conveyor monitoring: research-based anomaly detection, failure-risk prediction, vision.")
